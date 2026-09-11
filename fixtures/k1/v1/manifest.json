@@ -1,0 +1,21 @@
+{
+  "version": "k1-candidate-v1",
+  "fixture_kind": "synthetic non-secret documents",
+  "label_author": "Codex",
+  "label_review": "Human-authored/reviewed gold labels required before claiming the full K1 quality gate.",
+  "projects": [
+    "aster",
+    "boreal",
+    "cygnus"
+  ],
+  "supported_files": 30,
+  "questions": 30,
+  "variants": 45,
+  "paraphrases": 15,
+  "multipassage_questions": 6,
+  "absent_questions": 10,
+  "source_sha256": {
+    "documents.json": "edbb4b36b9ac94923d9a3248ed46f517bc775dd76badd7933941244ab21cb484",
+    "questions.json": "5d064aa57e9abbb6f166a4043230aa982952f0b7f0b79bf3d4b55ca2c4e055c9"
+  }
+}

@@ -1,0 +1,603 @@
+{
+  "answerable": [
+    {
+      "id": "aster-q01",
+      "project": "aster",
+      "variants": [
+        "Where is the launch site?",
+        "Which city hosts the launch?"
+      ],
+      "supports": [
+        {
+          "id": "aster/brief.md#lines:1",
+          "path": "brief.md",
+          "locator_kind": "lines",
+          "locator": "1",
+          "fact": "The launch site is Lisbon."
+        }
+      ]
+    },
+    {
+      "id": "aster-q02",
+      "project": "aster",
+      "variants": [
+        "What is the delivery date?",
+        "When is delivery scheduled?"
+      ],
+      "supports": [
+        {
+          "id": "aster/schedule.md#lines:1",
+          "path": "schedule.md",
+          "locator_kind": "lines",
+          "locator": "1",
+          "fact": "The delivery date is October 12."
+        }
+      ]
+    },
+    {
+      "id": "aster-q03",
+      "project": "aster",
+      "variants": [
+        "What is the payload mass limit?",
+        "How many kilograms may the payload weigh?"
+      ],
+      "supports": [
+        {
+          "id": "aster/capacity.txt#lines:1",
+          "path": "capacity.txt",
+          "locator_kind": "lines",
+          "locator": "1",
+          "fact": "The payload mass limit is 18 kilograms."
+        }
+      ]
+    },
+    {
+      "id": "aster-q04",
+      "project": "aster",
+      "variants": [
+        "What is the enclosure material?",
+        "What metal forms the enclosure?"
+      ],
+      "supports": [
+        {
+          "id": "aster/materials.txt#lines:1",
+          "path": "materials.txt",
+          "locator_kind": "lines",
+          "locator": "1",
+          "fact": "The enclosure material is titanium."
+        }
+      ]
+    },
+    {
+      "id": "aster-q05",
+      "project": "aster",
+      "variants": [
+        "What are the supply voltage and cooling method?",
+        "How many volts power this device and how is it cooled?"
+      ],
+      "supports": [
+        {
+          "id": "aster/design.pdf#page:1",
+          "path": "design.pdf",
+          "locator_kind": "page",
+          "locator": "1",
+          "fact": "The supply voltage is 24 volts."
+        },
+        {
+          "id": "aster/design.pdf#page:3",
+          "path": "design.pdf",
+          "locator_kind": "page",
+          "locator": "3",
+          "fact": "The cooling method is liquid."
+        }
+      ]
+    },
+    {
+      "id": "aster-q06",
+      "project": "aster",
+      "variants": [
+        "What are the humidity and vibration test limits?"
+      ],
+      "supports": [
+        {
+          "id": "aster/verification.pdf#page:1",
+          "path": "verification.pdf",
+          "locator_kind": "page",
+          "locator": "1",
+          "fact": "The humidity test limit is 40 percent."
+        },
+        {
+          "id": "aster/verification.pdf#page:2",
+          "path": "verification.pdf",
+          "locator_kind": "page",
+          "locator": "2",
+          "fact": "The vibration test limit is 6 g."
+        }
+      ]
+    },
+    {
+      "id": "aster-q07",
+      "project": "aster",
+      "variants": [
+        "What is the shutdown procedure?"
+      ],
+      "supports": [
+        {
+          "id": "aster/runbook.docx#section:Shutdown / paragraph 4",
+          "path": "runbook.docx",
+          "locator_kind": "section",
+          "locator": "Shutdown / paragraph 4",
+          "fact": "The shutdown procedure is to isolate supply."
+        }
+      ]
+    },
+    {
+      "id": "aster-q08",
+      "project": "aster",
+      "variants": [
+        "What is the warranty duration?"
+      ],
+      "supports": [
+        {
+          "id": "aster/service.docx#section:Warranty / paragraph 6",
+          "path": "service.docx",
+          "locator_kind": "section",
+          "locator": "Warranty / paragraph 6",
+          "fact": "The warranty duration is 18 months."
+        }
+      ]
+    },
+    {
+      "id": "aster-q09",
+      "project": "aster",
+      "variants": [
+        "How many retry attempts are configured?"
+      ],
+      "supports": [
+        {
+          "id": "aster/controller.py#lines:1",
+          "path": "controller.py",
+          "locator_kind": "lines",
+          "locator": "1",
+          "fact": "The retry count is 3 attempts."
+        }
+      ]
+    },
+    {
+      "id": "aster-q10",
+      "project": "aster",
+      "variants": [
+        "What is the service port?"
+      ],
+      "supports": [
+        {
+          "id": "aster/settings.json#lines:1",
+          "path": "settings.json",
+          "locator_kind": "lines",
+          "locator": "1",
+          "fact": "The service port is 7311."
+        }
+      ]
+    },
+    {
+      "id": "boreal-q01",
+      "project": "boreal",
+      "variants": [
+        "Where is the launch site?",
+        "Which city hosts the launch?"
+      ],
+      "supports": [
+        {
+          "id": "boreal/brief.md#lines:1",
+          "path": "brief.md",
+          "locator_kind": "lines",
+          "locator": "1",
+          "fact": "The launch site is Oslo."
+        }
+      ]
+    },
+    {
+      "id": "boreal-q02",
+      "project": "boreal",
+      "variants": [
+        "What is the delivery date?",
+        "When is delivery scheduled?"
+      ],
+      "supports": [
+        {
+          "id": "boreal/schedule.md#lines:1",
+          "path": "schedule.md",
+          "locator_kind": "lines",
+          "locator": "1",
+          "fact": "The delivery date is November 7."
+        }
+      ]
+    },
+    {
+      "id": "boreal-q03",
+      "project": "boreal",
+      "variants": [
+        "What is the payload mass limit?",
+        "How many kilograms may the payload weigh?"
+      ],
+      "supports": [
+        {
+          "id": "boreal/capacity.txt#lines:1",
+          "path": "capacity.txt",
+          "locator_kind": "lines",
+          "locator": "1",
+          "fact": "The payload mass limit is 27 kilograms."
+        }
+      ]
+    },
+    {
+      "id": "boreal-q04",
+      "project": "boreal",
+      "variants": [
+        "What is the enclosure material?",
+        "What metal forms the enclosure?"
+      ],
+      "supports": [
+        {
+          "id": "boreal/materials.txt#lines:1",
+          "path": "materials.txt",
+          "locator_kind": "lines",
+          "locator": "1",
+          "fact": "The enclosure material is aluminum."
+        }
+      ]
+    },
+    {
+      "id": "boreal-q05",
+      "project": "boreal",
+      "variants": [
+        "What are the supply voltage and cooling method?",
+        "How many volts power this device and how is it cooled?"
+      ],
+      "supports": [
+        {
+          "id": "boreal/design.pdf#page:1",
+          "path": "design.pdf",
+          "locator_kind": "page",
+          "locator": "1",
+          "fact": "The supply voltage is 36 volts."
+        },
+        {
+          "id": "boreal/design.pdf#page:3",
+          "path": "design.pdf",
+          "locator_kind": "page",
+          "locator": "3",
+          "fact": "The cooling method is air."
+        }
+      ]
+    },
+    {
+      "id": "boreal-q06",
+      "project": "boreal",
+      "variants": [
+        "What are the humidity and vibration test limits?"
+      ],
+      "supports": [
+        {
+          "id": "boreal/verification.pdf#page:1",
+          "path": "verification.pdf",
+          "locator_kind": "page",
+          "locator": "1",
+          "fact": "The humidity test limit is 55 percent."
+        },
+        {
+          "id": "boreal/verification.pdf#page:2",
+          "path": "verification.pdf",
+          "locator_kind": "page",
+          "locator": "2",
+          "fact": "The vibration test limit is 9 g."
+        }
+      ]
+    },
+    {
+      "id": "boreal-q07",
+      "project": "boreal",
+      "variants": [
+        "What is the shutdown procedure?"
+      ],
+      "supports": [
+        {
+          "id": "boreal/runbook.docx#section:Shutdown / paragraph 4",
+          "path": "runbook.docx",
+          "locator_kind": "section",
+          "locator": "Shutdown / paragraph 4",
+          "fact": "The shutdown procedure is to close inlet."
+        }
+      ]
+    },
+    {
+      "id": "boreal-q08",
+      "project": "boreal",
+      "variants": [
+        "What is the warranty duration?"
+      ],
+      "supports": [
+        {
+          "id": "boreal/service.docx#section:Warranty / paragraph 6",
+          "path": "service.docx",
+          "locator_kind": "section",
+          "locator": "Warranty / paragraph 6",
+          "fact": "The warranty duration is 24 months."
+        }
+      ]
+    },
+    {
+      "id": "boreal-q09",
+      "project": "boreal",
+      "variants": [
+        "How many retry attempts are configured?"
+      ],
+      "supports": [
+        {
+          "id": "boreal/controller.js#lines:1",
+          "path": "controller.js",
+          "locator_kind": "lines",
+          "locator": "1",
+          "fact": "The retry count is 5 attempts."
+        }
+      ]
+    },
+    {
+      "id": "boreal-q10",
+      "project": "boreal",
+      "variants": [
+        "What is the service port?"
+      ],
+      "supports": [
+        {
+          "id": "boreal/settings.yaml#lines:1",
+          "path": "settings.yaml",
+          "locator_kind": "lines",
+          "locator": "1",
+          "fact": "The service port is 8422."
+        }
+      ]
+    },
+    {
+      "id": "cygnus-q01",
+      "project": "cygnus",
+      "variants": [
+        "Where is the launch site?",
+        "Which city hosts the launch?"
+      ],
+      "supports": [
+        {
+          "id": "cygnus/brief.md#lines:1",
+          "path": "brief.md",
+          "locator_kind": "lines",
+          "locator": "1",
+          "fact": "The launch site is Quito."
+        }
+      ]
+    },
+    {
+      "id": "cygnus-q02",
+      "project": "cygnus",
+      "variants": [
+        "What is the delivery date?",
+        "When is delivery scheduled?"
+      ],
+      "supports": [
+        {
+          "id": "cygnus/schedule.md#lines:1",
+          "path": "schedule.md",
+          "locator_kind": "lines",
+          "locator": "1",
+          "fact": "The delivery date is December 3."
+        }
+      ]
+    },
+    {
+      "id": "cygnus-q03",
+      "project": "cygnus",
+      "variants": [
+        "What is the payload mass limit?",
+        "How many kilograms may the payload weigh?"
+      ],
+      "supports": [
+        {
+          "id": "cygnus/capacity.txt#lines:1",
+          "path": "capacity.txt",
+          "locator_kind": "lines",
+          "locator": "1",
+          "fact": "The payload mass limit is 32 kilograms."
+        }
+      ]
+    },
+    {
+      "id": "cygnus-q04",
+      "project": "cygnus",
+      "variants": [
+        "What is the enclosure material?",
+        "What metal forms the enclosure?"
+      ],
+      "supports": [
+        {
+          "id": "cygnus/materials.txt#lines:1",
+          "path": "materials.txt",
+          "locator_kind": "lines",
+          "locator": "1",
+          "fact": "The enclosure material is steel."
+        }
+      ]
+    },
+    {
+      "id": "cygnus-q05",
+      "project": "cygnus",
+      "variants": [
+        "What are the supply voltage and cooling method?",
+        "How many volts power this device and how is it cooled?"
+      ],
+      "supports": [
+        {
+          "id": "cygnus/design.pdf#page:1",
+          "path": "design.pdf",
+          "locator_kind": "page",
+          "locator": "1",
+          "fact": "The supply voltage is 48 volts."
+        },
+        {
+          "id": "cygnus/design.pdf#page:3",
+          "path": "design.pdf",
+          "locator_kind": "page",
+          "locator": "3",
+          "fact": "The cooling method is passive."
+        }
+      ]
+    },
+    {
+      "id": "cygnus-q06",
+      "project": "cygnus",
+      "variants": [
+        "What are the humidity and vibration test limits?"
+      ],
+      "supports": [
+        {
+          "id": "cygnus/verification.pdf#page:1",
+          "path": "verification.pdf",
+          "locator_kind": "page",
+          "locator": "1",
+          "fact": "The humidity test limit is 65 percent."
+        },
+        {
+          "id": "cygnus/verification.pdf#page:2",
+          "path": "verification.pdf",
+          "locator_kind": "page",
+          "locator": "2",
+          "fact": "The vibration test limit is 12 g."
+        }
+      ]
+    },
+    {
+      "id": "cygnus-q07",
+      "project": "cygnus",
+      "variants": [
+        "What is the shutdown procedure?"
+      ],
+      "supports": [
+        {
+          "id": "cygnus/runbook.docx#section:Shutdown / paragraph 4",
+          "path": "runbook.docx",
+          "locator_kind": "section",
+          "locator": "Shutdown / paragraph 4",
+          "fact": "The shutdown procedure is to open bypass."
+        }
+      ]
+    },
+    {
+      "id": "cygnus-q08",
+      "project": "cygnus",
+      "variants": [
+        "What is the warranty duration?"
+      ],
+      "supports": [
+        {
+          "id": "cygnus/service.docx#section:Warranty / paragraph 6",
+          "path": "service.docx",
+          "locator_kind": "section",
+          "locator": "Warranty / paragraph 6",
+          "fact": "The warranty duration is 30 months."
+        }
+      ]
+    },
+    {
+      "id": "cygnus-q09",
+      "project": "cygnus",
+      "variants": [
+        "How many retry attempts are configured?"
+      ],
+      "supports": [
+        {
+          "id": "cygnus/controller.py#lines:1",
+          "path": "controller.py",
+          "locator_kind": "lines",
+          "locator": "1",
+          "fact": "The retry count is 7 attempts."
+        }
+      ]
+    },
+    {
+      "id": "cygnus-q10",
+      "project": "cygnus",
+      "variants": [
+        "What is the service port?"
+      ],
+      "supports": [
+        {
+          "id": "cygnus/settings.toml#lines:1",
+          "path": "settings.toml",
+          "locator_kind": "lines",
+          "locator": "1",
+          "fact": "The service port is 9533."
+        }
+      ]
+    }
+  ],
+  "absent": [
+    {
+      "id": "absent-01",
+      "project": "aster",
+      "question": "What does BOREAL-ONLY alignment use?",
+      "other_project": "boreal"
+    },
+    {
+      "id": "absent-02",
+      "project": "aster",
+      "question": "What does CYGNUS-ONLY packaging use?",
+      "other_project": "cygnus"
+    },
+    {
+      "id": "absent-03",
+      "project": "boreal",
+      "question": "What does ASTER-ONLY calibration use?",
+      "other_project": "aster"
+    },
+    {
+      "id": "absent-04",
+      "project": "cygnus",
+      "question": "What does BOREAL-ONLY alignment use?",
+      "other_project": "boreal"
+    },
+    {
+      "id": "absent-05",
+      "project": "aster",
+      "question": "What is the battery chemistry?",
+      "other_project": null
+    },
+    {
+      "id": "absent-06",
+      "project": "boreal",
+      "question": "What is the purchase price?",
+      "other_project": null
+    },
+    {
+      "id": "absent-07",
+      "project": "cygnus",
+      "question": "Who is the project sponsor?",
+      "other_project": null
+    },
+    {
+      "id": "absent-08",
+      "project": "aster",
+      "question": "What is the radio encryption algorithm?",
+      "other_project": null
+    },
+    {
+      "id": "absent-09",
+      "project": "boreal",
+      "question": "What is the wheel diameter?",
+      "other_project": null
+    },
+    {
+      "id": "absent-10",
+      "project": "cygnus",
+      "question": "What is the orbital altitude?",
+      "other_project": null
+    }
+  ]
+}

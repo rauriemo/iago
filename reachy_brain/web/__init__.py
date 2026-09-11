@@ -1,0 +1,1 @@
+"""Local authenticated browser application."""

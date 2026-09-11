@@ -1,0 +1,11 @@
+{
+  "modules": [{
+    "module": "counter", "account": "synthetic-a", "enabled": true,
+    "transport": "python", "trusted": true,
+    "factory": "reachy_brain.integrations.fake_direct:create",
+    "tools": {
+      "read_counter": {"action": "read", "policy": "allow"},
+      "set_counter": {"action": "write", "policy": "confirm"}
+    }
+  }]
+}

@@ -1,0 +1,353 @@
+[
+  {
+    "id": "aster/brief.md",
+    "project": "aster",
+    "path": "brief.md",
+    "category": "markdown",
+    "content": [
+      "The launch site is Lisbon.",
+      "ASTER-ONLY calibration uses a quartz prism."
+    ]
+  },
+  {
+    "id": "aster/schedule.md",
+    "project": "aster",
+    "path": "schedule.md",
+    "category": "markdown",
+    "content": [
+      "The delivery date is October 12."
+    ]
+  },
+  {
+    "id": "aster/capacity.txt",
+    "project": "aster",
+    "path": "capacity.txt",
+    "category": "text",
+    "content": [
+      "The payload mass limit is 18 kilograms."
+    ]
+  },
+  {
+    "id": "aster/materials.txt",
+    "project": "aster",
+    "path": "materials.txt",
+    "category": "text",
+    "content": [
+      "The enclosure material is titanium."
+    ]
+  },
+  {
+    "id": "aster/design.pdf",
+    "project": "aster",
+    "path": "design.pdf",
+    "category": "pdf",
+    "content": [
+      "The supply voltage is 24 volts.",
+      "The clock frequency is 800 hertz.",
+      "The cooling method is liquid."
+    ]
+  },
+  {
+    "id": "aster/verification.pdf",
+    "project": "aster",
+    "path": "verification.pdf",
+    "category": "pdf",
+    "content": [
+      "The humidity test limit is 40 percent.",
+      "The vibration test limit is 6 g.",
+      "The inspection interval is 14 days."
+    ]
+  },
+  {
+    "id": "aster/runbook.docx",
+    "project": "aster",
+    "path": "runbook.docx",
+    "category": "docx",
+    "content": [
+      [
+        "Startup",
+        "Check the green indicator."
+      ],
+      [
+        "Shutdown",
+        "The shutdown procedure is to isolate supply."
+      ],
+      [
+        "Maintenance",
+        "Inspect the filter every Friday."
+      ]
+    ]
+  },
+  {
+    "id": "aster/service.docx",
+    "project": "aster",
+    "path": "service.docx",
+    "category": "docx",
+    "content": [
+      [
+        "Support",
+        "Use the local maintenance desk."
+      ],
+      [
+        "Routing",
+        "Route service requests to the workshop."
+      ],
+      [
+        "Warranty",
+        "The warranty duration is 18 months."
+      ]
+    ]
+  },
+  {
+    "id": "aster/controller.py",
+    "project": "aster",
+    "path": "controller.py",
+    "category": "source",
+    "content": [
+      "# The retry count is 3 attempts.\nRETRY_COUNT = 3"
+    ]
+  },
+  {
+    "id": "aster/settings.json",
+    "project": "aster",
+    "path": "settings.json",
+    "category": "source",
+    "content": [
+      "{\"service_port\": 7311, \"description\": \"The service port is 7311.\"}"
+    ]
+  },
+  {
+    "id": "boreal/brief.md",
+    "project": "boreal",
+    "path": "brief.md",
+    "category": "markdown",
+    "content": [
+      "The launch site is Oslo.",
+      "BOREAL-ONLY alignment uses a cedar gauge."
+    ]
+  },
+  {
+    "id": "boreal/schedule.md",
+    "project": "boreal",
+    "path": "schedule.md",
+    "category": "markdown",
+    "content": [
+      "The delivery date is November 7."
+    ]
+  },
+  {
+    "id": "boreal/capacity.txt",
+    "project": "boreal",
+    "path": "capacity.txt",
+    "category": "text",
+    "content": [
+      "The payload mass limit is 27 kilograms."
+    ]
+  },
+  {
+    "id": "boreal/materials.txt",
+    "project": "boreal",
+    "path": "materials.txt",
+    "category": "text",
+    "content": [
+      "The enclosure material is aluminum."
+    ]
+  },
+  {
+    "id": "boreal/design.pdf",
+    "project": "boreal",
+    "path": "design.pdf",
+    "category": "pdf",
+    "content": [
+      "The supply voltage is 36 volts.",
+      "The clock frequency is 800 hertz.",
+      "The cooling method is air."
+    ]
+  },
+  {
+    "id": "boreal/verification.pdf",
+    "project": "boreal",
+    "path": "verification.pdf",
+    "category": "pdf",
+    "content": [
+      "The humidity test limit is 55 percent.",
+      "The vibration test limit is 9 g.",
+      "The inspection interval is 14 days."
+    ]
+  },
+  {
+    "id": "boreal/runbook.docx",
+    "project": "boreal",
+    "path": "runbook.docx",
+    "category": "docx",
+    "content": [
+      [
+        "Startup",
+        "Check the green indicator."
+      ],
+      [
+        "Shutdown",
+        "The shutdown procedure is to close inlet."
+      ],
+      [
+        "Maintenance",
+        "Inspect the filter every Friday."
+      ]
+    ]
+  },
+  {
+    "id": "boreal/service.docx",
+    "project": "boreal",
+    "path": "service.docx",
+    "category": "docx",
+    "content": [
+      [
+        "Support",
+        "Use the local maintenance desk."
+      ],
+      [
+        "Routing",
+        "Route service requests to the workshop."
+      ],
+      [
+        "Warranty",
+        "The warranty duration is 24 months."
+      ]
+    ]
+  },
+  {
+    "id": "boreal/controller.js",
+    "project": "boreal",
+    "path": "controller.js",
+    "category": "source",
+    "content": [
+      "// The retry count is 5 attempts.\nconst RETRY_COUNT = 5;"
+    ]
+  },
+  {
+    "id": "boreal/settings.yaml",
+    "project": "boreal",
+    "path": "settings.yaml",
+    "category": "source",
+    "content": [
+      "service_port: 8422\ndescription: The service port is 8422."
+    ]
+  },
+  {
+    "id": "cygnus/brief.md",
+    "project": "cygnus",
+    "path": "brief.md",
+    "category": "markdown",
+    "content": [
+      "The launch site is Quito.",
+      "CYGNUS-ONLY packaging uses a coral spacer."
+    ]
+  },
+  {
+    "id": "cygnus/schedule.md",
+    "project": "cygnus",
+    "path": "schedule.md",
+    "category": "markdown",
+    "content": [
+      "The delivery date is December 3."
+    ]
+  },
+  {
+    "id": "cygnus/capacity.txt",
+    "project": "cygnus",
+    "path": "capacity.txt",
+    "category": "text",
+    "content": [
+      "The payload mass limit is 32 kilograms."
+    ]
+  },
+  {
+    "id": "cygnus/materials.txt",
+    "project": "cygnus",
+    "path": "materials.txt",
+    "category": "text",
+    "content": [
+      "The enclosure material is steel."
+    ]
+  },
+  {
+    "id": "cygnus/design.pdf",
+    "project": "cygnus",
+    "path": "design.pdf",
+    "category": "pdf",
+    "content": [
+      "The supply voltage is 48 volts.",
+      "The clock frequency is 800 hertz.",
+      "The cooling method is passive."
+    ]
+  },
+  {
+    "id": "cygnus/verification.pdf",
+    "project": "cygnus",
+    "path": "verification.pdf",
+    "category": "pdf",
+    "content": [
+      "The humidity test limit is 65 percent.",
+      "The vibration test limit is 12 g.",
+      "The inspection interval is 14 days."
+    ]
+  },
+  {
+    "id": "cygnus/runbook.docx",
+    "project": "cygnus",
+    "path": "runbook.docx",
+    "category": "docx",
+    "content": [
+      [
+        "Startup",
+        "Check the green indicator."
+      ],
+      [
+        "Shutdown",
+        "The shutdown procedure is to open bypass."
+      ],
+      [
+        "Maintenance",
+        "Inspect the filter every Friday."
+      ]
+    ]
+  },
+  {
+    "id": "cygnus/service.docx",
+    "project": "cygnus",
+    "path": "service.docx",
+    "category": "docx",
+    "content": [
+      [
+        "Support",
+        "Use the local maintenance desk."
+      ],
+      [
+        "Routing",
+        "Route service requests to the workshop."
+      ],
+      [
+        "Warranty",
+        "The warranty duration is 30 months."
+      ]
+    ]
+  },
+  {
+    "id": "cygnus/controller.py",
+    "project": "cygnus",
+    "path": "controller.py",
+    "category": "source",
+    "content": [
+      "# The retry count is 7 attempts.\nRETRY_COUNT = 7"
+    ]
+  },
+  {
+    "id": "cygnus/settings.toml",
+    "project": "cygnus",
+    "path": "settings.toml",
+    "category": "source",
+    "content": [
+      "service_port = 9533\ndescription = \"The service port is 9533.\""
+    ]
+  }
+]

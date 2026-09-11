@@ -1,0 +1,65 @@
+{
+  "modules": [
+    {
+      "module": "calendar",
+      "account": "synthetic-a",
+      "enabled": true,
+      "transport": "stdio",
+      "command": ".venv/Scripts/python.exe",
+      "args": [
+        "-m",
+        "reachy_brain.integrations.fake_calendar",
+        "--data",
+        "local-data/fake-calendar.sqlite"
+      ],
+      "bound_arguments": {
+        "account": "synthetic-a"
+      },
+      "capabilities": [
+        "test_calendar"
+      ],
+      "tools": {
+        "list_events": {
+          "action": "read",
+          "policy": "allow"
+        },
+        "draft_event": {
+          "action": "draft",
+          "policy": "allow"
+        },
+        "create_event": {
+          "action": "write",
+          "policy": "confirm",
+          "operation_argument": "operation_id",
+          "reconcile_tool": "operation_status",
+          "cancel_tool": "request_cancel"
+        },
+        "operation_status": {
+          "action": "read",
+          "policy": "allow"
+        },
+        "connection_identity": {
+          "action": "read",
+          "policy": "allow"
+        },
+        "request_cancel": {
+          "action": "write",
+          "policy": "confirm",
+          "operation_argument": "request_id",
+          "reconcile_tool": "operation_status"
+        }
+      },
+      "identity_probe": {
+        "tool": "connection_identity",
+        "issuer": "iago-test-calendar"
+      }
+    }
+  ],
+  "skills": [
+    {
+      "path": "examples/workflows/fake-calendar",
+      "trusted": true,
+      "enabled": true
+    }
+  ]
+}

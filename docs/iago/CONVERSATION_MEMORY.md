@@ -1,0 +1,9 @@
+# Conversation memory
+
+The application owns canonical user turns and conservatively acknowledged assistant speech. Generated but unheard answer text is not input to memory compaction. Provider response chains are not used to restore old answers.
+
+Before a new answer, more than 24 retained messages or 24,000 retained characters triggers an attempt to summarize older messages using the configured Astra brain. At least two older messages must be available; the newest eight remain verbatim. The summary is bounded to 3,000 characters and a ten-second deadline, uses no tools, and consumes normal reasoning usage/development budget. These trigger values are not a strict 24,000-character input cap: eight individually bounded recent turns may exceed it. Canonical storage still has its 40-message hard bound.
+
+Successful summaries replace the older prefix with a clearly labeled derived-memory message, not a new user instruction or authorization. A pending gesture turn is not compacted because delayed speech may supersede it. Stop, replacement, visual clearing or changed history invalidates in-flight summary results. The provider stream closes on cancellation. All transient-history clearing also clears its embedded summaries; saved original transcripts are separate and are not rewritten by compaction.
+
+If summarization fails, is empty or exceeds its output limit, the existing bounded history remains and the UI reports that it could not be condensed. At the hard message bound, older entries can still age out; the app does not claim perfect or permanent recall. Summarization can add up to its deadline to a triggering turn. Users should save important decisions as notes. Models can omit or misstate details; a narrow live synthetic fact-retention check is not general long-discussion or visual-summary quality qualification.

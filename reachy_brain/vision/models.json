@@ -1,0 +1,20 @@
+{
+  "objects": {
+    "url": "https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/int8/1/efficientdet_lite0.tflite",
+    "file": "efficientdet_lite0.tflite",
+    "sha256": "0720bf247bd76e6594ea28fa9c6f7c5242be774818997dbbeffc4da460c723bb",
+    "bytes": 4602795
+  },
+  "hands": {
+    "url": "https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task",
+    "file": "gesture_recognizer.task",
+    "sha256": "97952348cf6a6a4915c2ea1496b4b37ebabc50cbbf80571435643c455f2b0482",
+    "bytes": 8373440
+  },
+  "labels": {
+    "url": "https://storage.googleapis.com/mediapipe-tasks/object_detector/labelmap.txt",
+    "file": "labelmap.txt",
+    "sha256": "f8803ef7900160c629d570848dfda4175e21667bf7b71f73f8ece4938c9f2bf2",
+    "bytes": 661
+  }
+}

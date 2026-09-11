@@ -1,0 +1,45 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "iago-companion"
+version = "0.1.0"
+description = "Iago: interruptible visual conversation for Windows and Reachy Mini"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+  "fastapi>=0.141,<0.142", "uvicorn>=0.52,<0.53",
+  "openai>=3.13,<4", "httpx>=0.28,<0.29", "httpx2>=2.12,<3", "websockets>=15,<16",
+  "mcp>=2.2,<3", "pydantic>=2.13,<3", "pydantic-settings>=2.15,<3",
+  "pillow>=12.3,<13", "pypdf>=6.18,<7", "python-docx>=1.2,<2",
+  "watchfiles>=1.2,<2", "numpy>=2.5,<3", "jsonschema>=4.23,<5",
+  "pyyaml>=6,<7", "psutil>=7,<8",
+]
+
+[project.optional-dependencies]
+vision = ["mediapipe>=1.0.1,<2"]
+robot = ["reachy-mini>=1.10,<2", "sounddevice>=0.5.6,<0.6"]
+
+[dependency-groups]
+dev = ["pytest>=9.1,<10", "pytest-asyncio>=1.4,<2", "playwright>=1.62,<2", "ruff>=0.16,<0.17", "reportlab>=4,<5"]
+
+[project.scripts]
+iago = "reachy_brain.cli:main"
+iago-verify = "reachy_brain.verification:main"
+iago-edge = "reachy_brain.robot.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["reachy_brain"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "-ra --strict-markers"
+markers = ["features(*ids): feature coverage", "scenario(id): acceptance scenario", "live_provider: real provider", "live_pc: physical PC", "robot: physical Reachy"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "B", "ASYNC"]

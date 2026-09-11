@@ -1,0 +1,7 @@
+{
+  "id": "fake-calendar-review",
+  "description": "TEST ONLY: inspect synthetic calendar availability, draft a review and create it after exact-action approval.",
+  "tools": ["calendar__synthetic-a__list_events", "calendar__synthetic-a__draft_event", "calendar__synthetic-a__create_event"],
+  "capabilities": ["test_calendar"],
+  "resources": []
+}
