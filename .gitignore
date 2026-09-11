@@ -1,0 +1,23 @@
+# Local Python tooling and generated output
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# Private provider configuration; keep non-secret examples trackable
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Keep personal recordings and local runtime data out of Git by default
+/local-data/
+/recordings/
+/fixtures/private/

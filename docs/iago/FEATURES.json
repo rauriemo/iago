@@ -1,0 +1,1026 @@
+{
+  "format_version": 1,
+  "project": "Iago",
+  "source_spec": "docs/iago/SPEC.md",
+  "source_revision": 6,
+  "source_sha256": "f693ec33b066723946fcb777f2817da467fbd72165db1eb7af2bf0cad9324f8e",
+  "created_date": "2026-09-11",
+  "scope": "Complete Revision 6 first release: 36 features, preserving all 35 Revision 5 features and adding E1 extensible tools, integrations and skills. Production personal connectors and wake-word detection remain later scope.",
+  "notice": "Planning manifest only. No app implemented or tests run. Tier assignments are minimums; scenario-level coverage must follow the full specification.",
+  "implementation_statuses": [
+    "not_started",
+    "partial",
+    "implemented"
+  ],
+  "validation_statuses": [
+    "not_run",
+    "pass",
+    "fail",
+    "blocked"
+  ],
+  "features": [
+    {
+      "id": "C1",
+      "name": "Spoken brainstorming",
+      "required_behavior": "Live transcription to Astra; concise responses that develop ideas and notice tradeoffs",
+      "spec_acceptance_summary": "Real discussion with pauses and changes of mind",
+      "implementation_status": "not_started",
+      "implementation_paths": [],
+      "test_ids": [],
+      "validation": {
+        "offline": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "live_provider": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "live_pc": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        }
+      },
+      "notes": []
+    },
+    {
+      "id": "C2",
+      "name": "Full-duplex interruption",
+      "required_behavior": "Speak over the assistant or press Stop; queued text/audio is canceled",
+      "spec_acceptance_summary": "Both voice providers; physical speaker cutoff",
+      "implementation_status": "not_started",
+      "implementation_paths": [],
+      "test_ids": [],
+      "validation": {
+        "offline": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "live_provider": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "live_pc": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "robot": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        }
+      },
+      "notes": []
+    },
+    {
+      "id": "C3",
+      "name": "Patient turns",
+      "required_behavior": "Normal and Patient endpoint settings; manual talk/commit fallback",
+      "spec_acceptance_summary": "Unfinished thoughts do not routinely trigger early replies",
+      "implementation_status": "not_started",
+      "implementation_paths": [],
+      "test_ids": [],
+      "validation": {
+        "offline": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "live_pc": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        }
+      },
+      "notes": []
+    },
+    {
+      "id": "C4",
+      "name": "Astra brain",
+      "required_behavior": "Text/image reasoning and bounded visual retrieval tools",
+      "spec_acceptance_summary": "Real model access; brain unchanged during voice fallback",
+      "implementation_status": "not_started",
+      "implementation_paths": [],
+      "test_ids": [],
+      "validation": {
+        "offline": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "live_provider": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        }
+      },
+      "notes": []
+    },
+    {
+      "id": "C5",
+      "name": "ElevenLabs voice",
+      "required_behavior": "Chosen voice ID, preview, validation, streaming output",
+      "spec_acceptance_summary": "Actual configured voice plays",
+      "implementation_status": "not_started",
+      "implementation_paths": [],
+      "test_ids": [],
+      "validation": {
+        "offline": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "live_provider": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "live_pc": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "robot": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        }
+      },
+      "notes": []
+    },
+    {
+      "id": "C6",
+      "name": "OpenAI speech",
+      "required_behavior": "Works alone; fallback follows explicit policy",
+      "spec_acceptance_summary": "Missing key, provider failure, and interrupted fallback",
+      "implementation_status": "not_started",
+      "implementation_paths": [],
+      "test_ids": [],
+      "validation": {
+        "offline": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "live_provider": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "live_pc": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "robot": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        }
+      },
+      "notes": []
+    },
+    {
+      "id": "C7",
+      "name": "Personality",
+      "required_behavior": "Editable instructions; English default and explicit language switching",
+      "spec_acceptance_summary": "Short useful spoken turns; respectful challenge",
+      "implementation_status": "not_started",
+      "implementation_paths": [],
+      "test_ids": [],
+      "validation": {
+        "offline": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "live_provider": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "live_pc": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        }
+      },
+      "notes": []
+    },
+    {
+      "id": "C8",
+      "name": "Conversation continuity",
+      "required_behavior": "Active context, heard-answer history, bounded summaries",
+      "spec_acceptance_summary": "Interrupted answers do not introduce unheard facts",
+      "implementation_status": "not_started",
+      "implementation_paths": [],
+      "test_ids": [],
+      "validation": {
+        "offline": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "live_provider": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "live_pc": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        }
+      },
+      "notes": []
+    },
+    {
+      "id": "C9",
+      "name": "Notes and history",
+      "required_behavior": "Optional saved transcripts, explicit Save idea, export/delete",
+      "spec_acceptance_summary": "No external development actions from casual discussion",
+      "implementation_status": "not_started",
+      "implementation_paths": [],
+      "test_ids": [],
+      "validation": {
+        "offline": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "live_pc": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        }
+      },
+      "notes": []
+    },
+    {
+      "id": "V1",
+      "name": "Live view",
+      "required_behavior": "Webcam/robot preview, current frame, camera controls",
+      "spec_acceptance_summary": "Fresh image IDs and visible capture state",
+      "implementation_status": "not_started",
+      "implementation_paths": [],
+      "test_ids": [],
+      "validation": {
+        "offline": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "live_pc": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "robot": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        }
+      },
+      "notes": []
+    },
+    {
+      "id": "V2",
+      "name": "Whiteboard and phone reading",
+      "required_behavior": "Detailed source images, selectable crops, overview plus detail; ask for a better view when needed",
+      "spec_acceptance_summary": "Real handwriting, diagrams, and phone screens",
+      "implementation_status": "not_started",
+      "implementation_paths": [],
+      "test_ids": [],
+      "validation": {
+        "offline": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "live_provider": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "live_pc": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "robot": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        }
+      },
+      "notes": []
+    },
+    {
+      "id": "V3",
+      "name": "Visual ring buffer",
+      "required_behavior": "Approximately ten minutes at 1 fps, bounded by bytes too",
+      "spec_acceptance_summary": "Time/size eviction and visible retained range",
+      "implementation_status": "not_started",
+      "implementation_paths": [],
+      "test_ids": [],
+      "validation": {
+        "offline": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "live_pc": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "robot": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        }
+      },
+      "notes": []
+    },
+    {
+      "id": "V4",
+      "name": "Visual history tools",
+      "required_behavior": "Browse timeline, search metadata, inspect original frame/crop, capture now",
+      "spec_acceptance_summary": "References to earlier objects resolve to actual evidence",
+      "implementation_status": "not_started",
+      "implementation_paths": [],
+      "test_ids": [],
+      "validation": {
+        "offline": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "live_provider": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "live_pc": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        }
+      },
+      "notes": []
+    },
+    {
+      "id": "V5",
+      "name": "Speech/image alignment",
+      "required_behavior": "Capture timestamps linked to spoken turns and events",
+      "spec_acceptance_summary": "Object shown during a question remains findable after being lowered",
+      "implementation_status": "not_started",
+      "implementation_paths": [],
+      "test_ids": [],
+      "validation": {
+        "offline": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "live_pc": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "robot": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        }
+      },
+      "notes": []
+    },
+    {
+      "id": "V6",
+      "name": "Session reference images",
+      "required_behavior": "Explicitly pin a small set of boards/images; version changed boards",
+      "spec_acceptance_summary": "Discussion can outlast ten-minute rolling history",
+      "implementation_status": "not_started",
+      "implementation_paths": [],
+      "test_ids": [],
+      "validation": {
+        "offline": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "live_provider": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "live_pc": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        }
+      },
+      "notes": []
+    },
+    {
+      "id": "V7",
+      "name": "Image input fallback",
+      "required_behavior": "Upload or paste a screenshot/photo on the PC",
+      "spec_acceptance_summary": "Read detailed material when optical capture is poor",
+      "implementation_status": "not_started",
+      "implementation_paths": [],
+      "test_ids": [],
+      "validation": {
+        "offline": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "live_provider": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "live_pc": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        }
+      },
+      "notes": []
+    },
+    {
+      "id": "V8",
+      "name": "Evidence display",
+      "required_behavior": "Show the images/times used for the answer and uncertainty",
+      "spec_acceptance_summary": "User can correct the selected reference",
+      "implementation_status": "not_started",
+      "implementation_paths": [],
+      "test_ids": [],
+      "validation": {
+        "offline": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "live_provider": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "live_pc": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        }
+      },
+      "notes": []
+    },
+    {
+      "id": "P1",
+      "name": "Person presence",
+      "required_behavior": "Stable presence/absence and entry/exit events",
+      "spec_acceptance_summary": "Occlusion does not repeatedly produce greetings",
+      "implementation_status": "not_started",
+      "implementation_paths": [],
+      "test_ids": [],
+      "validation": {
+        "offline": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "live_pc": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "robot": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        }
+      },
+      "notes": []
+    },
+    {
+      "id": "P2",
+      "name": "Object detection",
+      "required_behavior": "Small pretrained detector; supported labels, boxes, scores",
+      "spec_acceptance_summary": "Labels are declared; unknown objects remain available to Astra vision",
+      "implementation_status": "not_started",
+      "implementation_paths": [],
+      "test_ids": [],
+      "validation": {
+        "offline": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "live_pc": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "robot": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        }
+      },
+      "notes": []
+    },
+    {
+      "id": "P3",
+      "name": "Wave detection",
+      "required_behavior": "Hand landmarks across time plus a wave state machine",
+      "spec_acceptance_summary": "Static open palm, drawing and robot camera motion are negative cases",
+      "implementation_status": "not_started",
+      "implementation_paths": [],
+      "test_ids": [],
+      "validation": {
+        "offline": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "live_pc": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "robot": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        }
+      },
+      "notes": []
+    },
+    {
+      "id": "P4",
+      "name": "Event log",
+      "required_behavior": "Timestamped presence, wave, supported object-appearance, and scene-change events",
+      "spec_acceptance_summary": "Events link to retained frames where available",
+      "implementation_status": "not_started",
+      "implementation_paths": [],
+      "test_ids": [],
+      "validation": {
+        "offline": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "live_pc": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "robot": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        }
+      },
+      "notes": []
+    },
+    {
+      "id": "P5",
+      "name": "Trigger rules",
+      "required_behavior": "Editable prompt, enable toggle, conditions, cooldown, expiry and action",
+      "spec_acceptance_summary": "Deterministic suppression and cancellation tests",
+      "implementation_status": "not_started",
+      "implementation_paths": [],
+      "test_ids": [],
+      "validation": {
+        "offline": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "live_pc": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        }
+      },
+      "notes": []
+    },
+    {
+      "id": "P6",
+      "name": "Greeting presets",
+      "required_behavior": "Working person-entry and wave presets; initially disabled during setup",
+      "spec_acceptance_summary": "Enabled presets can start a short conversation",
+      "implementation_status": "not_started",
+      "implementation_paths": [],
+      "test_ids": [],
+      "validation": {
+        "offline": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "live_provider": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "live_pc": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "robot": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        }
+      },
+      "notes": []
+    },
+    {
+      "id": "P7",
+      "name": "Aware mode",
+      "required_behavior": "Local perception outside a conversation; explicit active state",
+      "spec_acceptance_summary": "No continuous cloud reasoning or transcription while merely aware",
+      "implementation_status": "not_started",
+      "implementation_paths": [],
+      "test_ids": [],
+      "validation": {
+        "offline": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "live_provider": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "live_pc": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "robot": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        }
+      },
+      "notes": []
+    },
+    {
+      "id": "P8",
+      "name": "Restraint",
+      "required_behavior": "User speech wins; repeat suppression, quiet times and interruption backoff",
+      "spec_acceptance_summary": "No event storm or stale greetings",
+      "implementation_status": "not_started",
+      "implementation_paths": [],
+      "test_ids": [],
+      "validation": {
+        "offline": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "live_pc": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "robot": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        }
+      },
+      "notes": []
+    },
+    {
+      "id": "P9",
+      "name": "Physical expression",
+      "required_behavior": "Small acknowledgment/listening/speaking cues; motion off switch",
+      "spec_acceptance_summary": "SDK bounds and single motion owner; PC uses a state indicator",
+      "implementation_status": "not_started",
+      "implementation_paths": [],
+      "test_ids": [],
+      "validation": {
+        "offline": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "live_pc": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "robot": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        }
+      },
+      "notes": []
+    },
+    {
+      "id": "D1",
+      "name": "PC-only mode",
+      "required_behavior": "Native Windows backend plus local browser devices",
+      "spec_acceptance_summary": "No Reachy, simulator, WSL or robot media stack needed",
+      "implementation_status": "not_started",
+      "implementation_paths": [],
+      "test_ids": [],
+      "validation": {
+        "offline": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "live_provider": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "live_pc": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        }
+      },
+      "notes": []
+    },
+    {
+      "id": "D2",
+      "name": "PC-assisted Reachy",
+      "required_behavior": "Robot handles physical media and stop; PC handles brain orchestration, history and perception",
+      "spec_acceptance_summary": "Fake edge integration now; real Wi-Fi acceptance after arrival",
+      "implementation_status": "not_started",
+      "implementation_paths": [],
+      "test_ids": [],
+      "validation": {
+        "offline": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "robot": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        }
+      },
+      "notes": []
+    },
+    {
+      "id": "D3",
+      "name": "Standalone profile",
+      "required_behavior": "Same core can run onboard with qualified reduced workloads",
+      "spec_acceptance_summary": "Hardware performance report; full-rate vision is not assumed",
+      "implementation_status": "not_started",
+      "implementation_paths": [],
+      "test_ids": [],
+      "validation": {
+        "offline": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "robot": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        }
+      },
+      "notes": []
+    },
+    {
+      "id": "D4",
+      "name": "Control UI",
+      "required_behavior": "Session/mode controls, devices, voice, vision, history, triggers and diagnostics",
+      "spec_acceptance_summary": "Clear setup and active state",
+      "implementation_status": "not_started",
+      "implementation_paths": [],
+      "test_ids": [],
+      "validation": {
+        "offline": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "live_pc": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "robot": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        }
+      },
+      "notes": []
+    },
+    {
+      "id": "D5",
+      "name": "Recovery",
+      "required_behavior": "Bounded queues, reconnect, device-loss handling, local watchdog",
+      "spec_acceptance_summary": "No stale audio/events replay after recovery",
+      "implementation_status": "not_started",
+      "implementation_paths": [],
+      "test_ids": [],
+      "validation": {
+        "offline": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "live_provider": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "live_pc": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "robot": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        }
+      },
+      "notes": []
+    },
+    {
+      "id": "D6",
+      "name": "Diagnostics and budget",
+      "required_behavior": "Stage latency, effective fps, resource use, storage and provider usage",
+      "spec_acceptance_summary": "Actual values distinguished from estimates",
+      "implementation_status": "not_started",
+      "implementation_paths": [],
+      "test_ids": [],
+      "validation": {
+        "offline": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "live_provider": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "live_pc": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "robot": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        }
+      },
+      "notes": []
+    },
+    {
+      "id": "P10",
+      "name": "Thumbs-up / thumbs-down conversational responses",
+      "required_behavior": "Stable live-camera yes/no input bound to an unexpired question; release rearming, speech priority, conflict suppression and feedback; no screen/upload/history turns",
+      "spec_acceptance_summary": "20 examples per thumb class and 20 negatives; >=90% recall per class, <=1 false response; deterministic ownership and source-isolation gates",
+      "implementation_status": "not_started",
+      "implementation_paths": [],
+      "test_ids": [],
+      "validation": {
+        "offline": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "live_provider": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "live_pc": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "robot": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        }
+      },
+      "notes": []
+    },
+    {
+      "id": "V9",
+      "name": "Continuous desktop screen sharing",
+      "required_behavior": "Explicit continuous visual-only browser sharing alongside camera; source-aware current/history/crops/pins, shared global budgets and source-scoped clearing",
+      "spec_acceptance_summary": "12 real screen scenarios, source attribution/readability, shared limits, capture/permission lifecycle, clearing and interruption",
+      "implementation_status": "not_started",
+      "implementation_paths": [],
+      "test_ids": [],
+      "validation": {
+        "offline": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "live_provider": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "live_pc": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "robot": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        }
+      },
+      "notes": []
+    },
+    {
+      "id": "K1",
+      "name": "Search project documents during conversation",
+      "required_behavior": "Configured projects; bounded local incremental read-only index and Astra search/read with cited snippets, exclusions, isolation and removal",
+      "spec_acceptance_summary": "30 supported files across 3 projects plus 12 boundary fixtures; 45 answerable query variants and 10 absent-answer queries; retrieval/citation/update/cancellation gates",
+      "implementation_status": "not_started",
+      "implementation_paths": [],
+      "test_ids": [],
+      "validation": {
+        "offline": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "live_provider": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "live_pc": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "robot": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        }
+      },
+      "notes": []
+    },
+    {
+      "id": "E1",
+      "name": "Extensible tools, integrations and skills",
+      "required_behavior": "Working shared registry/executor, MCP stdio/Streamable HTTP and direct adapters, private credentials, trusted on-demand workflows, account/action policies, exact confirmations, durable reconciliation, event ingress and controls; test-only fake calendar/sample workflow, no real personal connector accounts",
+      "spec_acceptance_summary": "All Revision 6 E1 behavioral gates: actual MCP round trips, discovery/schema/capability/account isolation, skills, confirmation binding, cancellation/duplicates/reconciliation, injection resistance, events and immediate interruption",
+      "implementation_status": "not_started",
+      "implementation_paths": [],
+      "test_ids": [],
+      "validation": {
+        "offline": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "live_provider": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "live_pc": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        },
+        "robot": {
+          "status": "not_run",
+          "evidence": [],
+          "blocker": null
+        }
+      },
+      "notes": []
+    }
+  ],
+  "updated_date": "2026-09-11"
+}
