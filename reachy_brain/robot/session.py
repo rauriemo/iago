@@ -12,11 +12,16 @@ import numpy as np
 from reachy_brain.providers.live import Transcription
 
 from .client import EdgeClient
+from .local_client import LocalClient
+from .video_consumer import VideoCamera
 
 
 class RobotSession:
-    def __init__(self, settings, gate, core, notify, *, client_factory=EdgeClient, on_preview=None):
+    def __init__(self, settings, gate, core, notify, *, client_factory=None, on_preview=None):
         self.settings, self.gate, self.core, self.notify = settings, gate, core, notify
+        client_factory = client_factory or (
+            LocalClient if settings.deployment_mode == "reachy_local" else EdgeClient
+        )
         self.client_factory = client_factory
         self.closed = False
         self.reconnect_task = None
@@ -37,12 +42,20 @@ class RobotSession:
         self.camera_enabled = True
         self.motion_enabled = False
         self.camera_tasks = set()
+        self.capture_wake = asyncio.Event()
         self.error = None
         self.speech_event_ids = deque(maxlen=128)
         self.input_generation = 0
         self.muted = False
         self.audio_settings = {"muted": False, "patient": False, "volume": 0.8}
         self.on_preview = on_preview
+        self.video = (
+            VideoCamera(
+                settings.robot_camera_hf_token.get_secret_value(), settings.robot_camera_peer_id
+            )
+            if settings.robot_camera_transport == "webrtc"
+            else None
+        )
 
     def spawn(self, coro):
         task = asyncio.create_task(coro)
@@ -207,7 +220,7 @@ class RobotSession:
                 self.edge.clock.local(captured, now=time.time()) if captured is not None else None
             )
             if not mapped or mapped["stale"] or mapped["uncertainty"] > 0.1:
-                self.core.thumbs.invalidate("uncertain_speech_timing")
+                await self.core.uncertain_speech_onset()
             else:
                 await self.core.speech_onset(mapped["time"], sink_already_stopped=True)
         elif kind == "speech_end":
@@ -274,15 +287,17 @@ class RobotSession:
                 await self.notify({"type": "state", "mode": "idle", "voice_reason": self.error})
             raise
 
-    async def _cancel_tasks(self):
+    async def _cancel_tasks(self, *, stop_video=True):
         current = asyncio.current_task()
         for task in list(self.tasks):
             if task is not current:
                 task.cancel()
         await asyncio.gather(*(t for t in self.tasks if t is not current), return_exceptions=True)
+        if self.video and stop_video:
+            await self.video.stop()
 
     async def _set_mode(self, mode):
-        await self._cancel_tasks()
+        await self._cancel_tasks(stop_video=mode == "idle")
         if self.stt:
             await self.stt.close()
             self.stt = None
@@ -302,6 +317,7 @@ class RobotSession:
                 self.source = self.core.visual.source(
                     self.core.connection, "camera", "Reachy camera Â· capture timing unqualified"
                 )
+            self.core.visual.capture_hooks[self.source.id] = self.request_capture
             self.core.selected_source = self.source.id
             self.spawn_camera(self.camera())
             if self.settings.perception_enabled and self.on_preview:
@@ -322,6 +338,8 @@ class RobotSession:
             for task in list(self.camera_tasks):
                 task.cancel()
             await asyncio.gather(*self.camera_tasks, return_exceptions=True)
+            if self.video:
+                await self.video.stop()
             if self.source:
                 await self.core.clear_evidence(self.source.id, disable=True)
         await self.edge.command("camera", enabled=enabled)
@@ -330,6 +348,7 @@ class RobotSession:
             self.source = self.core.visual.source(
                 self.core.connection, "camera", "Reachy camera - capture timing unqualified"
             )
+            self.core.visual.capture_hooks[self.source.id] = self.request_capture
             self.core.selected_source = self.source.id
             self.spawn_camera(self.camera())
             if self.settings.perception_enabled and self.on_preview:
@@ -392,41 +411,101 @@ class RobotSession:
         except Exception as exc:
             await self.fail(type(exc).__name__)
 
+    def request_capture(self):
+        """Wake the sole archive owner; repeated requests coalesce into one wakeup."""
+        if (
+            self.closed
+            or self.core.mode == "idle"
+            or not self.camera_enabled
+            or self.source is None
+            or not self.source.enabled
+        ):
+            return False
+        self.capture_wake.set()
+        return True
+
     async def camera(self):
         try:
             while self.core.mode != "idle" and self.source.enabled:
-                generation = self.source.generation
-                image, timing = await self.edge.snapshot()
+                self.capture_wake.clear()
+                source, generation = self.source, self.source.generation
+                image, timing = await (getattr(self, "video", None) or self.edge).snapshot()
+                if (
+                    self.core.mode == "idle"
+                    or self.source is not source
+                    or not source.enabled
+                    or source.generation != generation
+                ):
+                    continue
+                sequence = timing.get("sequence")
+                if type(sequence) is not int or not 0 <= sequence <= 9007199254740991:
+                    raise ValueError("invalid_robot_frame_sequence")
+                if sequence <= source.last_frame_sequence:
+                    try:
+                        await asyncio.wait_for(self.capture_wake.wait(), 1)
+                    except TimeoutError:
+                        pass
+                    continue
                 prepared = await asyncio.to_thread(self.core.visual.prepare, image)
-                frame = self.core.visual.add(self.source.id, generation, time.time(), prepared)
+                if (
+                    self.core.mode == "idle"
+                    or self.source is not source
+                    or not source.enabled
+                    or source.generation != generation
+                ):
+                    continue
+                frame = self.core.visual.add(
+                    source.id, generation, time.time(), prepared, sequence=sequence
+                )
                 frame.capture_time_known = False
                 frame.timing_note = (
-                    "SDK retrieval timestamp only; physical capture timing unqualified"
+                    "WebRTC frame observed by backend; physical capture timing unqualified"
+                    if getattr(self, "video", None)
+                    else "SDK retrieval timestamp only; physical capture timing unqualified"
                 )
-                await asyncio.sleep(1)
+                try:
+                    await asyncio.wait_for(self.capture_wake.wait(), 1)
+                except TimeoutError:
+                    pass
         except asyncio.CancelledError:
             raise
         except Exception as exc:
+            if getattr(self, "video", None):
+                await self.video.stop()
+                self.camera_enabled = False
+                if self.source and self.source.enabled:
+                    await self.core.clear_evidence(self.source.id, disable=True)
+                with contextlib.suppress(Exception):
+                    await self.edge.command("camera", enabled=False)
+                await self.notify({"type": "robot_camera", "enabled": False})
             await self.notify(
                 {"type": "error", "message": "Robot camera unavailable: " + type(exc).__name__}
             )
 
     async def previews(self):
         """Small detector frames have an independent cadence from the visual archive."""
-        previous = None
+        previous, identity = -1, None
         try:
             while self.core.mode != "idle" and self.source.enabled:
                 source, generation = self.source, self.source.generation
-                image, timing = await self.edge.snapshot(preview=True)
+                image, timing = await (getattr(self, "video", None) or self.edge).snapshot(
+                    preview=True
+                )
                 mapped = timing["retrieved"]
+                sequence = timing.get("sequence")
+                if type(sequence) is not int or not 0 <= sequence <= 9007199254740991:
+                    raise ValueError("invalid_robot_preview_sequence")
+                if identity != (source.id, generation):
+                    identity, previous = (source.id, generation), -1
                 if (
                     self.core.mode != "idle"
+                    and self.source is source
                     and source.enabled
                     and source.generation == generation
-                    and timing["sequence"] != previous
+                    and sequence > previous
                     and not mapped["stale"]
                 ):
-                    previous = timing["sequence"]
+                    previous = sequence
                     # The SDK exposes retrieval time, not capture PTS. Only an explicitly
                     # measured capture-delay bound can qualify temporal gestures.
                     bound = self.settings.robot_camera_timing_uncertainty
@@ -438,6 +517,7 @@ class RobotSession:
                         image,
                         uncertainty,
                         timing.get("moving", True),
+                        sequence,
                     )
                 await asyncio.sleep(0.1)
         except asyncio.CancelledError:
@@ -456,6 +536,8 @@ class RobotSession:
         for task in list(self.tasks):
             task.cancel()
         await asyncio.gather(*self.tasks, return_exceptions=True)
+        if self.video:
+            await self.video.stop()
         if self.stt:
             await self.stt.close()
         with contextlib.suppress(Exception):

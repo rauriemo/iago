@@ -19,6 +19,9 @@ dependencies = [
 [project.optional-dependencies]
 vision = ["mediapipe>=1.0.1,<2"]
 robot = ["reachy-mini>=1.10,<2", "sounddevice>=0.5.6,<0.6"]
+robot-camera = [
+    "reachy-mini[central-consumer]>=1.10,<2",
+]
 
 [dependency-groups]
 dev = ["pytest>=9.1,<10", "pytest-asyncio>=1.4,<2", "playwright>=1.62,<2", "ruff>=0.16,<0.17", "reportlab>=4,<5"]

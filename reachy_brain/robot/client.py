@@ -12,6 +12,8 @@ from urllib.parse import urlsplit
 import httpx
 from websockets.asyncio.client import connect
 
+from .protocol import VERSION, validate_ready
+
 
 class ClockEstimate:
     def __init__(self):
@@ -20,20 +22,32 @@ class ClockEstimate:
         self.updated = 0
 
     def observe(self, sent, received, remote):
-        if not all(math.isfinite(v) for v in (sent, received, remote)) or received < sent:
+        if (
+            not all(type(v) in (int, float) and math.isfinite(v) for v in (sent, received, remote))
+            or received < sent
+        ):
             raise ValueError("invalid_clock_sample")
         uncertainty = (received - sent) / 2
-        if uncertainty < self.uncertainty or received - self.updated > 10:
-            self.offset = remote - (sent + received) / 2
+        offset = remote - (sent + received) / 2
+        age = received - self.updated
+        incompatible = abs(offset - self.offset) > (
+            uncertainty + self.uncertainty + max(0, age) * 0.001
+        )
+        if uncertainty < self.uncertainty or age > 10 or age < 0 or incompatible:
+            self.offset = offset
             self.uncertainty = uncertainty
             self.updated = received
 
     def local(self, remote, *, now):
-        age = max(0, now - self.updated)
+        if not all(type(v) in (int, float) and math.isfinite(v) for v in (remote, now)):
+            raise ValueError("invalid_clock_mapping")
+        age = now - self.updated
+        if age < 0:
+            self.uncertainty = math.inf
         return {
             "time": remote - self.offset,
-            "uncertainty": self.uncertainty + age * 0.001,
-            "stale": age > 10,
+            "uncertainty": self.uncertainty + max(0, age) * 0.001,
+            "stale": age < 0 or age > 10 or not math.isfinite(self.uncertainty),
         }
 
 
@@ -70,13 +84,19 @@ class EdgeClient:
         self.on_event = on_event
         self.error = None
         self.stop_generation = 0
+        self.capabilities = None
 
     def target(self, path):
         return self.url.replace("https://", "wss://", 1).replace("http://", "ws://", 1) + path
 
     def hello(self):
         return json.dumps(
-            {"token": self.token, "session": self.session, "connection": self.connection}
+            {
+                "token": self.token,
+                "session": self.session,
+                "connection": self.connection,
+                "protocol_version": VERSION,
+            }
         )
 
     async def start(self):
@@ -95,9 +115,7 @@ class EdgeClient:
         await self.control.send(self.hello())
         async with asyncio.timeout(3):
             ready = json.loads(await self.control.recv())
-        if ready.get("type") != "ready" or ready.get("connection") != self.connection:
-            await self.control.close()
-            raise RuntimeError("edge_ownership_failed")
+        self.capabilities = validate_ready(ready, session=self.session, connection=self.connection)
         self.stop_generation = ready["stop_generation"]
         self.heartbeat_task = asyncio.create_task(self._heartbeat())
 

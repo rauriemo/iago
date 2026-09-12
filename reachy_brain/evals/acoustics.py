@@ -1,6 +1,7 @@
 """Cutoff measurements from independently recorded PCM, not cancellation acknowledgments."""
 
 import hashlib
+import io
 import math
 import wave
 from pathlib import Path
@@ -34,15 +35,15 @@ def measure_cutoff(root: Path, trial: CutoffTrial):
     path = (root / trial.file).resolve()
     if not path.is_relative_to(root) or path == root:
         raise ValueError("recording_outside_fixture_root")
-    size = path.stat().st_size
-    if size > 32 * 1024 * 1024:
-        raise ValueError("recording_size_limit")
     if not trial.independent_recording or not trial.human_reviewed_isolation:
         raise ValueError("independent_isolated_recording_required")
     with path.open("rb") as source:
-        if hashlib.file_digest(source, "sha256").hexdigest() != trial.sha256:
-            raise ValueError("recording_hash_mismatch")
-    with wave.open(str(path), "rb") as source:
+        data = source.read(32 * 1024 * 1024 + 1)
+    if len(data) > 32 * 1024 * 1024:
+        raise ValueError("recording_size_limit")
+    if hashlib.sha256(data).hexdigest() != trial.sha256:
+        raise ValueError("recording_hash_mismatch")
+    with wave.open(io.BytesIO(data), "rb") as source:
         rate, channels, count = source.getframerate(), source.getnchannels(), source.getnframes()
         if (
             source.getsampwidth() != 2

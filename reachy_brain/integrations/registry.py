@@ -6,6 +6,7 @@ import json
 import re
 import time
 import uuid
+from collections import deque
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any, Literal
@@ -206,6 +207,8 @@ class ToolExecutor:
         self.max_pending = concurrency + 32
         self.closed = False
         self.cancellations = set()
+        self.timing_sequence = 0
+        self.timing_samples = deque(maxlen=64)
 
     async def close(self):
         self.closed = True
@@ -436,7 +439,37 @@ class ToolExecutor:
         finally:
             self.executions.discard(task)
 
+    def timing_snapshot(self):
+        return {
+            "samples": list(self.timing_samples),
+            "total": self.timing_sequence,
+            "sample_limit": 64,
+            "scope": "Backend execute calls including validation, queue and journal waits; excludes proposal/user-confirmation waiting, reconciliation calls and physical effects. No tool/account/payload identifiers.",
+        }
+
     async def execute(self, key: str, payload: dict, context: CallContext) -> dict:
+        started, outcome = time.perf_counter(), "error"
+        tool = self.registry.tools.get(key)
+        action = tool.action if tool and tool.action in {"read", "draft", "write"} else "unknown"
+        try:
+            result = await self._execute(key, payload, context)
+            outcome = "ok" if result.get("status") == "ok" else "unsuccessful"
+            return result
+        except asyncio.CancelledError:
+            outcome = "canceled"
+            raise
+        finally:
+            self.timing_sequence += 1
+            self.timing_samples.append(
+                {
+                    "sequence": self.timing_sequence,
+                    "operation": action,
+                    "outcome": outcome,
+                    "seconds": max(0, time.perf_counter() - started),
+                }
+            )
+
+    async def _execute(self, key: str, payload: dict, context: CallContext) -> dict:
         if self.closed:
             return {"status": "executor_closed", "operation_id": context.operation_id}
         if len(self.executions) >= self.max_pending:

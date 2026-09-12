@@ -58,10 +58,12 @@ def test_edge_auth_owner_modes_and_disconnect():
     with TestClient(app) as client:
         assert client.get("/status").status_code == 401
         with client.websocket_connect("/control") as ws:
-            ws.send_json({"token": token, "session": "s", "connection": "c"})
+            ws.send_json({"token": token, "session": "s", "connection": "c", "protocol_version": 1})
             assert ws.receive_json()["type"] == "ready"
             with client.websocket_connect("/control") as other:
-                other.send_json({"token": token, "session": "s2", "connection": "c2"})
+                other.send_json(
+                    {"token": token, "session": "s2", "connection": "c2", "protocol_version": 1}
+                )
                 assert other.receive()["type"] == "websocket.close"
             ws.send_json({"type": "audio_settings", "muted": True, "patient": True, "volume": 0.4})
             controls = ws.receive_json()

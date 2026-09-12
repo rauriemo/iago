@@ -69,7 +69,13 @@ async def test_style_reaches_astra_without_removing_runtime_instructions(monkeyp
         personality="Answer in Portuguese.",
     )
     brain = AstraBrain(settings, ProviderGate(settings))
-    assert [item async for item in brain.stream([], [])] == [{"type": "done", "usage": {}}]
+    assert [item async for item in brain.stream([], [])] == [
+        {
+            "type": "done",
+            "usage": {},
+            "provenance": {"response_id": "synthetic-response", "requested_model": "gpt-6-astra"},
+        }
+    ]
     request = create.call_args.kwargs
     assert request["model"] == "gpt-6-astra"
     assert RUNTIME_INSTRUCTIONS in request["instructions"]

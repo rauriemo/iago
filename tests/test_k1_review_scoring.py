@@ -13,8 +13,7 @@ def encoded(value):
     return json.dumps(value, sort_keys=True).encode()
 
 
-@pytest.fixture
-def synthetic_review():
+def synthetic_review_data():
     manifest, _, questions = load()
     cases = [
         (f"{q['id']}:{i}", q["project"], query, "answerable")
@@ -75,6 +74,11 @@ def synthetic_review():
         grades=grades,
     )
     return capture, review
+
+
+@pytest.fixture
+def synthetic_review():
+    return synthetic_review_data()
 
 
 @pytest.mark.features("K1")

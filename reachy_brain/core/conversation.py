@@ -10,8 +10,12 @@ from collections import deque
 from dataclasses import replace
 
 from reachy_brain.behavior.thumbs import Question, ThumbController
+from reachy_brain.core.gesture_activity import GestureActivity
+from reachy_brain.core.image_budget import image_input_bytes
 from reachy_brain.core.ownership import HeardLedger
 from reachy_brain.core.speech import SpeechStream
+from reachy_brain.core.speech_activity import SpeechActivity
+from reachy_brain.core.timing import InputTimings, ResponseTimings, StageTimings
 from reachy_brain.integrations.registry import CallContext, ToolError
 from reachy_brain.providers.live import ProviderError
 
@@ -33,10 +37,14 @@ class Conversation:
         self.voice_reason = "default"
         self.active_text = ""
         self.selected_source = None
+        self.selected_frame = None
+        self.selected_region = None
+        self.turn_visual_interval = None
         self.last_speech = 0
         self.evidence = []
         self.pending_input: dict[str, str] = {}
         self.input_order: deque[str] = deque()
+        self.recognized_inputs: deque[str] = deque(maxlen=128)
         self.current_input = ""
         self.project_context = lambda: None
         self.project_context_ready = lambda: True
@@ -55,6 +63,7 @@ class Conversation:
         self.proactive_frames = None
         self.on_proactive_stop = lambda: None
         self.user_speaking = False
+        self.deferred_speech_answer = False
         self.user_revision = 0
         self.record = lambda *args, **kwargs: None
         self.record_snapshot = lambda: None
@@ -67,8 +76,32 @@ class Conversation:
         self.answer_metadata = {}
         self.input_recording_token = None
         self.input_capture_start = None
+        self.input_capture_active = False
+        self.input_visual_sources = {}
+        self.speech_source_commits = {}
+        self.speech_source_inputs = {}
         self.recording_commits = deque()
         self.recording_inputs = {}
+        self.pending_visual_reference = None
+        self.input_visual_reference = None
+        self.reference_commits = {}
+        self.reference_inputs = {}
+        self.timings = ResponseTimings()
+        self.gesture_timings = StageTimings(
+            {
+                f"{gesture}_{stage}"
+                for gesture in ("thumb_up", "thumb_down")
+                for stage in ("recognition_observed", "arbitration", "commit")
+            },
+            "Initially committed thumbs only; may later be superseded by speech. Recognition uses first candidate capture through controller recognition on the reported source clock; uncertainty is retained, not physical exposure qualification. Arbitration is controller recognition through poll acceptance. Commit is monotonic backend accept entry through history/record submission, excluding UI delivery and audible answer.",
+        )
+        self.retrieval_timings = StageTimings(
+            {"combined_retrieval"},
+            "Elapsed from this answer's shared retrieval-budget start through its last visual/document result, limit decision or interrupted retrieval. Includes intervening model/workflow/approval time charged to that budget; excludes subsequent answer generation and audible output.",
+        )
+        self.speech_activity = SpeechActivity()
+        self.gesture_activity = GestureActivity()
+        self.input_timings = InputTimings(clock=lambda: self.timings.clock())
 
     def valid(self, epoch):
         return (
@@ -96,13 +129,18 @@ class Conversation:
         )
 
     async def stop(self, *, generation=None, sink_already_stopped=False):
+        self.deferred_speech_answer = False
         if self.proactive_guard is not None:
             self.on_proactive_stop()
         self.proactive_guard = self.proactive_context = self.proactive_frames = None
+        self.selected_frame = None
+        self.selected_region = None
+        self.turn_visual_interval = None
         self.proactive_origin = {}
         self.thumbs.invalidate("stop")
         self.question_draft = self.question_segment = None
         old = self.epoch
+        self.timings.finish(old, "canceled")
         self.epoch += 1
         if generation is not None:
             self.stop_generation = max(self.stop_generation, generation)
@@ -144,11 +182,20 @@ class Conversation:
             self.history.clear()
             self.input_order.clear()
             self.pending_input.clear()
+            self.recognized_inputs.clear()
             self.current_input = ""
             self.input_recording_token = None
             self.input_capture_start = None
+            self.input_capture_active = False
+            self.input_visual_sources.clear()
+            self.speech_source_commits.clear()
+            self.speech_source_inputs.clear()
             self.recording_commits.clear()
             self.recording_inputs.clear()
+            self.pending_visual_reference = self.input_visual_reference = None
+            self.reference_commits.clear()
+            self.reference_inputs.clear()
+            self.input_timings.clear()
             for frame in list(self.visual.frames.values()):
                 frame.pin = ""
         if mode == "idle":
@@ -162,6 +209,7 @@ class Conversation:
         )
 
     async def clear_evidence(self, source=None, disable=False, owner=None):
+        self.pending_visual_reference = None
         self.visual.clear(source, disable=disable, owner=owner)
         # Conservative fallback allowed by SPEC: purge derived context when provenance is mixed.
         self.history.clear()
@@ -189,10 +237,37 @@ class Conversation:
             else:
                 self.voice_provider, self.voice_reason = "openai", result["reason"]
 
-    async def commit_recognition(self, stt, *, capture_start=None, capture_end=None):
+    def select_speech_reference(self, frame_id, region=None):
+        if frame_id is None:
+            self.pending_visual_reference = None
+            return None
+        if self.mode != "conversation":
+            raise ToolError("conversation_required")
+        if not isinstance(frame_id, str) or not 1 <= len(frame_id) <= 128:
+            raise ToolError("invalid_frame_reference")
+        frame = self.visual.get(frame_id)
+        region = self.visual.validate_region(frame_id, region) if region is not None else None
+        self.pending_visual_reference = {
+            "frame_id": frame.id,
+            "region": region,
+            "generation": self.visual.context_generation,
+            "token": uuid.uuid4().hex,
+        }
+        return dict(self.pending_visual_reference)
+
+    async def commit_recognition(
+        self, stt, *, capture_start=None, capture_end=None, capture_clock_uncertainty=None
+    ):
+        if capture_clock_uncertainty is not None and (
+            type(capture_clock_uncertainty) not in (int, float)
+            or not math.isfinite(capture_clock_uncertainty)
+            or not 0 <= capture_clock_uncertainty <= 10
+        ):
+            raise ToolError("invalid_speech_clock_uncertainty")
         if len(self.recording_commits) >= 32:
             raise ToolError("recognition_commit_limit")
         start = self.input_capture_start if capture_start is None else capture_start
+        self.input_capture_active = False
         self.input_capture_start = None
         timing = {}
         if (
@@ -203,40 +278,140 @@ class Conversation:
             and 0 <= start <= capture_end
         ):
             timing = {"capture_start": start, "capture_end": capture_end}
+            if capture_clock_uncertainty is not None:
+                timing["capture_clock_uncertainty"] = capture_clock_uncertainty
         pending = (uuid.uuid4().hex, self.input_recording_token, timing)
+        self.speech_source_commits[pending[0]] = self.input_visual_sources
+        self.input_visual_sources = {}
+        if self.input_visual_reference is not None:
+            self.reference_commits[pending[0]] = self.input_visual_reference
+        elif start is None and self.pending_visual_reference is not None:
+            self.reference_commits[pending[0]] = {
+                **self.pending_visual_reference,
+                "onset_missing": True,
+            }
+        self.input_visual_reference = None
         self.recording_commits.append(pending)
+        self.input_timings.start(pending[0])
         try:
             accepted = await stt.commit()
             if accepted is False and pending in self.recording_commits:
                 self.recording_commits.remove(pending)
+                self.input_timings.abandon(pending[0])
+                self.reference_commits.pop(pending[0], None)
+                self.speech_source_commits.pop(pending[0], None)
             return accepted
         except BaseException:
+            self.speech_source_commits.pop(pending[0], None)
+            self.reference_commits.pop(pending[0], None)
+            self.input_timings.abandon(pending[0])
             if pending in self.recording_commits:
                 self.recording_commits.remove(pending)
             raise
 
     async def transcription_event(self, event):
-        kind, item = event["type"], event.get("item_id")
+        if self.mode != "conversation":
+            return
+        if not isinstance(event, dict):
+            raise ToolError("invalid_recognition_event")
+        kind, item = event.get("type"), event.get("item_id")
+        if not isinstance(kind, str):
+            raise ToolError("invalid_recognition_event")
+        if kind not in {
+            "input_audio_buffer.committed",
+            "conversation.item.input_audio_transcription.delta",
+            "conversation.item.input_audio_transcription.completed",
+        }:
+            return
+        if not isinstance(item, str) or not item.strip() or len(item) > 128:
+            raise ToolError("invalid_recognition_item")
+        if item in self.recognized_inputs:
+            return
+        if kind != "input_audio_buffer.committed":
+            text = event.get("delta" if kind.endswith(".delta") else "transcript")
+            if not isinstance(text, str) or len(text) > 12000:
+                raise ToolError("invalid_recognition_text")
+        if kind != "conversation.item.input_audio_transcription.delta":
+            pending_items = set(self.input_order) | self.pending_input.keys()
+            if item not in pending_items and len(pending_items) >= 32:
+                raise ToolError("recognition_input_limit")
         if kind == "input_audio_buffer.committed":
             if item not in self.input_order:
                 self.input_order.append(item)
-                self.recording_inputs[item] = (
-                    self.recording_commits.popleft()[1:] if self.recording_commits else (None, {})
+                pending = (
+                    self.recording_commits.popleft() if self.recording_commits else (None, None, {})
                 )
+                self.recording_inputs[item] = pending[1:]
+                self.speech_source_inputs[item] = self.speech_source_commits.pop(pending[0], {})
+                reference = self.reference_commits.pop(pending[0], None)
+                if reference is not None:
+                    self.reference_inputs[item] = reference
+                self.input_timings.bind(item, pending[0])
         elif kind == "conversation.item.input_audio_transcription.delta":
             await self.emit("transcript_partial", text=event.get("delta", ""))
         elif kind == "conversation.item.input_audio_transcription.completed":
+            if item in self.pending_input:
+                if self.pending_input[item] != event["transcript"]:
+                    raise ToolError("conflicting_transcription_result")
+                return
+            self.input_timings.complete(item)
             self.pending_input[item] = event["transcript"]
         while self.input_order and self.input_order[0] in self.pending_input:
             ready = self.input_order.popleft()
+            self.recognized_inputs.append(ready)
             recording_token, timing = self.recording_inputs.pop(ready, (None, {}))
-            await self.user_turn(
-                self.pending_input.pop(ready),
-                kind="speech",
-                entry=ready,
-                recording_token=recording_token,
-                timing=timing,
-            )
+            reference = self.reference_inputs.pop(ready, None)
+            text = self.pending_input.pop(ready)
+            recognition_timing = self.input_timings.release(ready)
+            visual_sources = self.speech_source_inputs.pop(ready, {})
+            if visual_sources and timing:
+                with contextlib.suppress(ToolError):
+                    self.visual.associate_speech(
+                        text,
+                        timing["capture_start"],
+                        timing["capture_end"],
+                        visual_sources,
+                        uncertainty=timing.get("capture_clock_uncertainty", 0),
+                    )
+            try:
+                kwargs = {}
+                if reference is not None:
+                    if reference.get("onset_missing"):
+                        raise ToolError("reference_onset_missing")
+                    if reference["generation"] != self.visual.context_generation:
+                        raise ToolError("stale_reference")
+                    self.visual.get(reference["frame_id"])
+                    kwargs = {key: reference[key] for key in ("frame_id", "region")}
+                await self.user_turn(
+                    text,
+                    kind="speech",
+                    entry=ready,
+                    recording_token=recording_token,
+                    timing=timing,
+                    recognition_timing=recognition_timing,
+                    visual_sources=visual_sources,
+                    **kwargs,
+                )
+            except ToolError as exc:
+                if reference is None or exc.code not in {
+                    "stale_reference",
+                    "expired",
+                    "stale_source",
+                    "invalid_region",
+                    "reference_onset_missing",
+                }:
+                    raise
+                self.deferred_speech_answer = False
+                if not self.speech_inputs_pending():
+                    self.user_speaking = False
+                await self.emit(
+                    "error",
+                    message=(
+                        "Could not associate the selected reference with a speech start. Wait for Ready, then repeat the question."
+                        if exc.code == "reference_onset_missing"
+                        else "Selected spoken reference is no longer available. Select an image and repeat the question."
+                    ),
+                )
 
     def transcript_metadata(self, **extra):
         return {
@@ -269,13 +444,51 @@ class Conversation:
             metadata=metadata,
         )
 
-    async def user_turn(self, text, *, kind="typed", entry=None, recording_token=None, timing=None):
+    def speech_inputs_pending(self):
+        return bool(
+            self.input_capture_active
+            or self.input_capture_start is not None
+            or self.recording_commits
+            or self.input_order
+            or self.pending_input
+        )
+
+    async def user_turn(
+        self,
+        text,
+        *,
+        kind="typed",
+        entry=None,
+        recording_token=None,
+        timing=None,
+        recognition_timing=None,
+        visual_sources=None,
+        frame_id=None,
+        region=None,
+    ):
+        received = self.timings.clock()
         if kind == "typed":
             recording_token = self.record_snapshot()
-        self.user_speaking = False
+        if kind != "speech":
+            self.user_speaking = False
         text = text.strip()[:12000]
-        if not text or self.mode != "conversation":
+        if self.mode != "conversation":
             return
+        if not text:
+            if kind == "speech" and not self.speech_inputs_pending():
+                self.user_speaking = False
+                if self.deferred_speech_answer:
+                    self.deferred_speech_answer = False
+                    self.task = asyncio.create_task(self.answer(self.epoch))
+            return
+        if frame_id is not None:
+            if not isinstance(frame_id, str) or not 1 <= len(frame_id) <= 128:
+                raise ToolError("invalid_frame_reference")
+            self.visual.get(frame_id)
+        if region is not None:
+            if frame_id is None:
+                raise ToolError("crop_requires_frame")
+            region = self.visual.validate_region(frame_id, region)
         if not self.project_context_ready():
             await self.emit(
                 "error",
@@ -294,6 +507,14 @@ class Conversation:
                 message="Project context changed or is still changing. Please repeat your request when it finishes.",
             )
             return
+        if frame_id is not None:
+            # Stop can await cleanup; clear/expiry during that wait invalidates selection.
+            selected = self.visual.get(frame_id)
+            self.selected_frame = selected.id
+            self.selected_region = region
+        if kind == "speech":
+            self.turn_visual_interval = {"sources": visual_sources or {}, **(timing or {})}
+            self.speech_activity.record("accepted_speech", self.epoch)
         self.record_session()
         self.history.append({"role": "user", "content": text})
         self.current_input = text
@@ -309,8 +530,19 @@ class Conversation:
             ),
             generation=recording_token,
         )
-        await self.emit("transcript", text=text)
+        self.timings.begin(self.epoch, kind, started=received, recognition=recognition_timing)
         epoch = self.epoch
+        await self.emit("transcript", text=text)
+        if not self.valid(epoch):
+            return
+        if kind == "speech" and self.speech_inputs_pending():
+            # Do not reopen playback while a newer utterance is being captured
+            # or waiting for its ordered recognition result.
+            self.user_speaking = True
+            self.deferred_speech_answer = True
+            return
+        self.user_speaking = False
+        self.deferred_speech_answer = False
         self.task = asyncio.create_task(self.answer(epoch))
 
     async def proactive(self, intent, valid):
@@ -385,6 +617,25 @@ class Conversation:
                 self.answer_metadata["generated_truncated"] = True
             self.answer_generated = combined[:12000]
 
+    def record_model_response(self, epoch, provenance):
+        if self.answer_record_epoch != epoch or not isinstance(provenance, dict):
+            return
+        keys = ("response_id", "requested_model", "reported_model")
+        row = {key: provenance[key] for key in keys if key in provenance}
+        if not {"response_id", "requested_model"} <= row.keys() or any(
+            not isinstance(value, str) or not 0 < len(value) <= 128 for value in row.values()
+        ):
+            return
+        rows = self.answer_metadata.setdefault("model_responses", [])
+        for existing in rows:
+            if existing["response_id"] == row["response_id"]:
+                existing.update(row)
+                return
+        if len(rows) >= 32:
+            self.answer_metadata["model_responses_truncated"] = True
+            return
+        rows.append(row)
+
     def record_evidence(self, epoch, rows):
         if self.answer_record_epoch != epoch:
             return
@@ -420,6 +671,52 @@ class Conversation:
                     "source_id": row["source"],
                     "source_generation": row["generation"],
                 }
+                source_frame_id = row.get("source_frame_id")
+                if isinstance(source_frame_id, str) and 0 < len(source_frame_id) <= 128:
+                    reference["source_frame_id"] = source_frame_id
+                captured = row.get("captured")
+                image_hash = row.get("image_sha256")
+                if (
+                    isinstance(image_hash, str)
+                    and len(image_hash) == 64
+                    and all(char in "0123456789abcdef" for char in image_hash)
+                ):
+                    reference["image_sha256"] = image_hash
+                if type(captured) in (int, float) and math.isfinite(captured) and captured >= 0:
+                    reference["captured"] = captured
+                if type(row.get("capture_time_known")) is bool:
+                    reference["capture_time_known"] = row["capture_time_known"]
+                if "capture_uncertainty_seconds" in row:
+                    bound = row["capture_uncertainty_seconds"]
+                    if type(bound) not in (int, float) or not math.isfinite(bound) or bound < 0:
+                        bound = None
+                    reference["capture_uncertainty_seconds"] = bound
+                    reference["capture_interval"] = None
+                    if (
+                        bound is not None
+                        and reference.get("capture_time_known") is True
+                        and "captured" in reference
+                    ):
+                        interval = [captured - bound, captured + bound]
+                        if all(math.isfinite(value) for value in interval):
+                            reference["capture_interval"] = interval
+                if isinstance(row.get("source_kind"), str) and row["source_kind"] in {
+                    "camera",
+                    "screen",
+                    "upload",
+                }:
+                    reference["source_kind"] = row["source_kind"]
+                region = row.get("region")
+                if (
+                    isinstance(region, (list, tuple))
+                    and len(region) == 4
+                    and all(type(v) is int and 0 <= v <= 8192 for v in region)
+                    and region[2] > 0
+                    and region[3] > 0
+                    and region[0] + region[2] <= 8192
+                    and region[1] + region[3] <= 8192
+                ):
+                    reference["region"] = list(region)
             else:
                 continue
             if reference not in references:
@@ -427,8 +724,8 @@ class Conversation:
                     self.answer_metadata["evidence_truncated"] = True
                     continue
                 references.append(reference)
-        if references:
-            self.answer_metadata["evidence_refs"] = references
+        # Empty completed collection differs from missing/never-collected evidence.
+        self.answer_metadata["evidence_refs"] = references
 
     def record_answer(self, epoch):
         if self.answer_record_epoch != epoch or self.answer_record_session != self.session:
@@ -484,18 +781,45 @@ class Conversation:
             await self.emit("active_question", id=draft["id"], text=draft["text"], expires=now + 15)
 
     async def accept_thumb(self, response):
+        commit_started = time.monotonic()
         recording_token = self.record_snapshot()
         if (
             self.mode != "conversation"
+            or not self.thumbs.enabled
+            or self.user_speaking
             or response["session"] != self.session
+            or response["turn"] != self.epoch
             or response["slot"] in self.gesture_slots
         ):
             return
         camera = self.visual.sources.get(response["source"])
-        if not camera or not camera.enabled or camera.generation != response["generation"]:
+        if (
+            not camera
+            or camera.kind != "camera"
+            or not camera.enabled
+            or camera.generation != response["generation"]
+        ):
             return
+        accepted_epoch = self.epoch + 1
         self.user_revision += 1
         await self.stop()
+
+        def still_current():
+            return (
+                self.valid(accepted_epoch)
+                and self.session == response["session"]
+                and not self.user_speaking
+                and self.thumbs.enabled
+                and self.visual.sources.get(response["source"]) is camera
+                and camera.kind == "camera"
+                and camera.enabled
+                and camera.generation == response["generation"]
+                and self.thumbs.question is None
+                and self.question_draft is None
+            )
+
+        if not still_current():
+            return
         message = {
             "role": "user",
             "content": response["value"]
@@ -507,11 +831,11 @@ class Conversation:
         }
         self.history.append(message)
         self.gesture_slots[response["slot"]] = message
+        self.gesture_activity.accepted(response, self.epoch)
         if len(self.gesture_slots) > 32:
             retired = next(iter(self.gesture_slots))
             self.gesture_slots.pop(retired)
             self.record(self.session, "gesture-" + retired, retire=True)
-        await self.emit("transcript", text=response["value"], gesture=response)
         self.record(
             self.session,
             "gesture-" + response["slot"],
@@ -534,14 +858,57 @@ class Conversation:
             ),
             generation=recording_token,
         )
-        self.task = asyncio.create_task(self.answer(self.epoch))
+        gesture = response["gesture"]
+        timing = response.get("timing", {})
+        for stage, seconds in (
+            ("recognition_observed", timing.get("recognition_seconds")),
+            ("arbitration", timing.get("arbitration_seconds")),
+            ("commit", time.monotonic() - commit_started),
+        ):
+            if self.gesture_timings.record(gesture + "_" + stage, seconds):
+                self.gesture_timings.samples[-1]["source_uncertainty_seconds"] = timing.get(
+                    "source_uncertainty_seconds"
+                )
+        await self.emit("transcript", text=response["value"], gesture=response)
+        if still_current():
+            self.task = asyncio.create_task(self.answer(accepted_epoch))
+
+    async def uncertain_speech_onset(self):
+        self.speech_activity.record("uncertain_onset", self.epoch)
+        self.thumbs.invalidate("uncertain_speech_timing")
+        if not self.input_capture_active:
+            self.input_visual_reference = self.pending_visual_reference
+            self.pending_visual_reference = None
+        self.input_capture_active = True
+        self.input_capture_start = None
+        self.input_recording_token = self.record_snapshot()
+        self.input_visual_sources = {}
+        if self.input_visual_reference is not None:
+            self.input_visual_reference = {**self.input_visual_reference, "onset_missing": True}
+        self.user_speaking = True
+        self.last_speech = time.time()  # Receipt-based restraint, not a mapped capture timestamp.
+        await self.stop(sink_already_stopped=True)
 
     async def speech_onset(self, captured, *, sink_already_stopped=False):
+        self.speech_activity.record("onset", self.epoch)
+        bound = None
+        if not self.input_capture_active:
+            self.input_visual_reference = self.pending_visual_reference
+            self.pending_visual_reference = None
+            bound = self.input_visual_reference
         self.input_recording_token = self.record_snapshot()
         self.input_capture_start = captured
+        self.input_capture_active = True
+        self.input_visual_sources = {
+            source.id: source.generation
+            for source in self.visual.sources.values()
+            if source.enabled
+            and (source.kind in {"camera", "screen"} or source.id == self.selected_source)
+        }
         self.user_speaking = True
         replacement = self.thumbs.speech(captured, captured + 0.25, now=time.time())
         if replacement:
+            self.gesture_activity.superseded(replacement["supersede"], self.epoch)
             self.record(self.session, "gesture-" + replacement["supersede"], remove=True)
             message = self.gesture_slots.pop(replacement["supersede"], None)
             if message:
@@ -549,12 +916,22 @@ class Conversation:
             await self.emit("gesture_superseded", slot=replacement["supersede"])
         self.last_speech = captured
         await self.stop(sink_already_stopped=sink_already_stopped)
+        if bound is not None:
+            await self.emit("speech_reference", status="bound", token=bound["token"])
 
     def make_speech(self, epoch):
+        async def speech_emit(kind, **data):
+            if kind == "audio":
+                self.timings.mark(epoch, "first_audio_dispatch")
+            elif kind == "voice_fallback":
+                self.timings.mark(epoch, "voice_fallback")
+            await self.emit(kind, **data)
+
         async def speech_error(exc):
             if not self.valid(epoch):
                 return
             self.answer_interrupted = True
+            self.timings.mark(epoch, "speech_failed")
             self.ledger.interrupt(epoch)
             self.thumbs.invalidate("speech_failed")
             self.question_draft = self.question_segment = None
@@ -568,7 +945,7 @@ class Conversation:
         return SpeechStream(
             epoch,
             lambda: self.valid(epoch),
-            self.emit,
+            speech_emit,
             self.voices,
             self.voice_provider,
             self.ledger,
@@ -618,6 +995,7 @@ class Conversation:
     async def answer(self, epoch):
         if not self.valid(epoch):
             return
+        self.timings.begin(epoch)
         self.answer_recording_token = self.record_snapshot()
         self.record_session()
         self.answer_record_epoch = epoch
@@ -628,6 +1006,7 @@ class Conversation:
         self.answer_metadata = self.transcript_metadata(epoch=epoch, **self.proactive_origin)
         speech = self.make_speech(epoch)
         self.speech = speech
+        outcome = "error"
         try:
             async with speech:
                 await self._answer(epoch, speech)
@@ -636,11 +1015,21 @@ class Conversation:
                 self.voice_provider, self.voice_reason = "openai", "next_turn_after_partial_failure"
             if self.answer_record_epoch == epoch:
                 self.answer_complete = True
+            outcome = (
+                "speech_failed"
+                if speech.failed
+                else "finished"
+                if self.valid(epoch)
+                else "canceled"
+            )
         except asyncio.CancelledError:
+            outcome = "canceled"
+            self.timings.finish(epoch, "canceled")
             if self.answer_record_epoch == epoch:
                 self.answer_interrupted = True
             return
         except Exception as exc:
+            self.timings.finish(epoch, "error")
             if self.valid(epoch):
                 if speech.emitted and speech.provider == "elevenlabs":
                     self.voice_provider, self.voice_reason = (
@@ -648,11 +1037,19 @@ class Conversation:
                         "next_turn_after_partial_failure",
                     )
                 await self.stop()
-                code = exc.code if isinstance(exc, ProviderError) else type(exc).__name__
-                await self.emit(
-                    "error", message=f"Answer stopped ({code}); partial speech was not replayed."
+                code = (
+                    exc.code if isinstance(exc, (ProviderError, ToolError)) else type(exc).__name__
                 )
+                message = f"Answer stopped ({code}); partial speech was not replayed."
+                if code == "model_image_byte_limit":
+                    message = (
+                        "The images for this answer exceed the configured image limit. "
+                        "Try a narrower time range, fewer frames, or a crop of the relevant area. "
+                        "Partial speech was not replayed."
+                    )
+                await self.emit("error", code=code, message=message)
         finally:
+            self.timings.finish(epoch, outcome)
             self.record_answer(epoch)
             if self.speech is speech:
                 self.speech = None
@@ -718,6 +1115,28 @@ class Conversation:
         )
 
     async def _answer(self, epoch, speech):
+        measurement = {"used": False, "pending": False, "outcome": "ok"}
+        outcome = "ok"
+        try:
+            await self._answer_with_retrieval_timing(epoch, speech, measurement)
+            outcome = measurement["outcome"] if self.valid(epoch) else "canceled"
+        except asyncio.CancelledError:
+            outcome = "canceled"
+            raise
+        except BaseException:
+            outcome = "error"
+            raise
+        finally:
+            if measurement["used"]:
+                ended = time.monotonic() if measurement["pending"] else measurement["ended"]
+                if self.retrieval_timings.record(
+                    "combined_retrieval", max(0, ended - measurement["started"]), outcome
+                ):
+                    self.retrieval_timings.samples[-1]["limit_seconds"] = (
+                        self.settings.retrieval_deadline_seconds
+                    )
+
+    async def _answer_with_retrieval_timing(self, epoch, speech, measurement):
         await self.emit("thinking")
         await self.compact_history(epoch)
         if not self.valid(epoch):
@@ -739,7 +1158,11 @@ class Conversation:
             )
         # Proactive image evidence is bound to the event, never silently replaced
         # by a newer camera view. Ordinary user turns keep their selected source.
-        if self.proactive_frames is not None:
+        measurement["started"] = time.monotonic()
+        deadline = measurement["started"] + self.settings.retrieval_deadline_seconds
+        if self.selected_frame is not None:
+            frames = [self.visual.describe(self.visual.get(self.selected_frame))]
+        elif self.proactive_frames is not None:
             frames = []
             for frame_id in self.proactive_frames:
                 try:
@@ -755,6 +1178,52 @@ class Conversation:
                         "content": "Some event supporting images are no longer available. Do not claim to have inspected them.",
                     }
                 )
+        elif self.turn_visual_interval is not None:
+            interval = self.turn_visual_interval
+            start, end = interval.get("capture_start"), interval.get("capture_end")
+            source = self.visual.sources.get(self.selected_source)
+            frames = []
+            if (
+                source
+                and source.enabled
+                and source.kind == "upload"
+                and interval["sources"].get(source.id) == source.generation
+            ):
+                frames = self.visual.browse(source=source.id, limit=1)["frames"]
+            elif (
+                source
+                and source.enabled
+                and interval["sources"].get(source.id) == source.generation
+                and all(
+                    type(value) in (int, float) and math.isfinite(value) for value in (start, end)
+                )
+                and 0 <= start <= end
+            ):
+                candidates = self.visual.search(
+                    source=source.id,
+                    start=start - 2 - interval.get("capture_clock_uncertainty", 0),
+                    end=end + 2 + interval.get("capture_clock_uncertainty", 0),
+                    near=end,
+                )
+                frames = candidates["frames"][:1]
+            if interval.get("capture_clock_uncertainty", 0) > 0:
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": (
+                            "Speech processing timestamps have clock uncertainty of +/- "
+                            + str(interval["capture_clock_uncertainty"])
+                            + " seconds. Visual retrieval includes that margin; nearby images may be temporally ambiguous. This does not calibrate microphone or camera exposure latency."
+                        ),
+                    }
+                )
+            if not frames:
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": "No retained frame near the spoken utterance is available from its original source generation. Do not treat a newer image as what the user was showing then.",
+                    }
+                )
         else:
             frames = (
                 self.visual.browse(source=self.selected_source, limit=1)["frames"]
@@ -763,7 +1232,12 @@ class Conversation:
             )
         context.budgets["details"] = len(frames)
         for frame in frames:
-            image = self.visual.image_input(frame["id"])
+            measurement.update(used=True, pending=True)
+            async with asyncio.timeout(max(0.001, deadline - time.monotonic())):
+                image = await self.visual.image_input_async(frame["id"])
+            measurement.update(pending=False, ended=time.monotonic())
+            if not self.valid(epoch):
+                return
             messages.append(
                 {
                     "role": "user",
@@ -776,21 +1250,43 @@ class Conversation:
                     ],
                 }
             )
+        if self.selected_region is not None:
+            measurement.update(used=True, pending=True)
+            async with asyncio.timeout(max(0.001, deadline - time.monotonic())):
+                result = await self.executor.execute(
+                    "visual__session__inspect_region",
+                    {"id": self.selected_frame, "region": list(self.selected_region)},
+                    context,
+                )
+            if not self.valid(epoch):
+                return
+            measurement.update(pending=False, ended=time.monotonic())
+            if result["status"] != "ok":
+                raise ToolError("selected_crop_" + result["status"])
+            messages.append({"role": "user", "content": list(context.attachments)})
+            context.attachments.clear()
+            frames.extend(context.evidence)
         self.evidence = frames
         self.record_evidence(epoch, frames)
         await self.emit("evidence", frames=frames)
-        deadline = time.monotonic() + 10
         workflow_deadline = time.monotonic() + self.settings.workflow_deadline_seconds
         retrieval_rounds = 0
         for round_index in range(self.settings.workflow_max_rounds):
             if not self.valid(epoch):
                 return
             items, text = [], ""
+            context.budgets["image_bytes"] = image_input_bytes(
+                messages, self.settings.model_image_max_mib * 1024 * 1024
+            )
+            self.timings.mark(epoch, "model_start")
             async with contextlib.aclosing(self.brain.stream(messages, tools)) as events:
                 async for event in events:
                     if not self.valid(epoch):
                         return
+                    self.record_model_response(epoch, event.get("provenance"))
                     if event["type"] == "text":
+                        if event["text"].strip():
+                            self.timings.mark(epoch, "first_model_text")
                         text += event["text"]
                         self.track_generated(epoch, event["text"])
                         await self.emit("answer_partial", text=event["text"])
@@ -817,7 +1313,10 @@ class Conversation:
                 and tool.module in {"visual", "documents"}
             }
             if retrieval_calls:
+                self.timings.mark(epoch, "retrieval_requested")
                 retrieval_rounds += 1
+            if len(calls) > len(retrieval_calls):
+                self.timings.mark(epoch, "other_tool_requested")
             for call_index, call in enumerate(calls):
                 if not self.valid(epoch):
                     return
@@ -826,6 +1325,8 @@ class Conversation:
                     payload = json.loads(call["arguments"])
                 except (json.JSONDecodeError, KeyError):
                     payload = {}
+                if call_index in retrieval_calls:
+                    measurement.update(used=True, pending=True)
                 call_deadline = (
                     min(deadline, workflow_deadline)
                     if call_index in retrieval_calls
@@ -837,7 +1338,12 @@ class Conversation:
                 elif call_index in retrieval_calls and (retrieval_rounds > 3 or remaining <= 0):
                     result = {
                         "status": "retrieval_limit",
-                        "message": "Visual/document retrieval exhausted its shared three-round or ten-second limit. Report uncertainty; do not fabricate evidence.",
+                        "message": (
+                            "Visual/document retrieval exhausted its shared three-round or "
+                            f"{self.settings.retrieval_deadline_seconds:g}-second limit. "
+                            "Explain the limit and any missing evidence; do not fabricate an answer. "
+                            "Suggest narrowing the time range, source, or document query."
+                        ),
                     }
                 elif remaining <= 0:
                     result = {"status": "workflow_limit"}
@@ -878,6 +1384,10 @@ class Conversation:
                     else:
                         self.executor.drop_proposal(call_context.operation_id)
                         result = {"status": "denied"}
+                if call_index in retrieval_calls:
+                    measurement.update(pending=False, ended=time.monotonic())
+                    if result["status"] != "ok":
+                        measurement["outcome"] = "error"
                 messages.append(
                     {
                         "type": "function_call_output",

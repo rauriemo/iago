@@ -9,8 +9,73 @@ import threading
 import pytest
 
 from reachy_brain.config import Settings
+from reachy_brain.providers.live import ProviderError, ProviderGate
+from reachy_brain.providers.usage_storage import UsageStorage
+
+
+@pytest.mark.features("D6")
+@pytest.mark.scenario("USAGE-ABRUPT-EXIT-RECOVERY")
+@pytest.mark.parametrize("state", ["active", "limited", "both"])
+async def test_saved_admission_and_limit_survive_abrupt_child_exit(tmp_path, state):
+    script = """
+import asyncio, os, sys
+from pathlib import Path
+from reachy_brain.config import Settings
 from reachy_brain.providers.live import ProviderGate
 from reachy_brain.providers.usage_storage import UsageStorage
+async def main():
+    gate = ProviderGate(Settings(_env_file=None, iago_development_budget="unlimited"))
+    store = UsageStorage(gate, Path(sys.argv[1]))
+    await store.start()
+    if sys.argv[2] in ("active", "both"):
+        gate.begin_active("astra", "gpt-6-astra", {"private": "never-save-this"})
+        await gate.checkpoint("openai")
+    if sys.argv[2] in ("limited", "both"):
+        gate.limit("openai")
+        await store.flush()
+    # Deliberately bypass finally blocks, store.close and normal Python shutdown.
+    os._exit(17)
+asyncio.run(main())
+"""
+    path = tmp_path / "usage.json"
+    process = await asyncio.create_subprocess_exec(
+        sys.executable,
+        "-c",
+        script,
+        str(path),
+        state,
+        stdout=asyncio.subprocess.DEVNULL,
+        stderr=asyncio.subprocess.PIPE,
+        env={
+            k: os.environ[k]
+            for k in ("PATH", "SYSTEMROOT", "TEMP", "TMP", "USERPROFILE")
+            if k in os.environ
+        },
+        creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
+    )
+    try:
+        _, error = await asyncio.wait_for(process.communicate(), 20)
+        assert process.returncode == 17, error.decode(errors="replace")[-1000:]
+    finally:
+        if process.returncode is None:
+            process.kill()
+            await process.wait()
+    assert "never-save-this" not in path.read_text(encoding="utf-8")
+    for _ in range(2):
+        gate = ProviderGate(Settings(_env_file=None, iago_development_budget="unlimited"))
+        successor = UsageStorage(gate, path)
+        await successor.start()
+        try:
+            assert gate.unknown_charges == int(state in {"active", "both"})
+            assert gate.estimated_usd == 0 and not gate.active and not gate.usage
+            if state in {"limited", "both"}:
+                with pytest.raises(ProviderError, match="plan_limit"):
+                    gate.require("openai")
+            else:
+                gate.require("openai")
+            gate.require("elevenlabs")
+        finally:
+            await successor.close()
 
 
 @pytest.mark.features("D6")

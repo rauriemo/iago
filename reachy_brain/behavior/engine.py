@@ -1,6 +1,8 @@
 """Single pending proactive intent. Events provide evidence, never authorization."""
 
 import math
+import time
+import uuid
 from collections import OrderedDict, deque
 from dataclasses import asdict, dataclass, field
 from typing import Literal
@@ -75,8 +77,13 @@ class BehaviorEngine:
         self.last = {}
         self.pending = None
         self.log = deque(maxlen=200)
+        self.log_owner = uuid.uuid4().hex
+        self.log_total = 0
+        self.event_validator = lambda event, now: True
 
     def _reason(self, rule, event, now, *, cooldowns=True, origin_mode=None):
+        if not self.event_validator(event, now):
+            return "source_invalidated"
         if not rule.enabled:
             return "disabled"
         if self.mode == "idle" or (origin_mode or self.mode) not in rule.modes:
@@ -106,16 +113,30 @@ class BehaviorEngine:
         return ""
 
     def _record(self, event, reason, now):
+        self.log_total += 1
         self.log.append(
             {
+                "sequence": self.log_total,
                 "event": event.id,
                 "source": event.source,
+                "generation": event.generation,
                 "kind": event.kind,
+                "captured": event.captured,
                 "at": now,
                 "decision": reason,
             }
         )
         return reason
+
+    def observations(self):
+        return {
+            "owner": self.log_owner,
+            "total": self.log_total,
+            "sample_limit": self.log.maxlen,
+            "dropped_samples": self.log_total - len(self.log),
+            "samples": [dict(row) for row in self.log],
+            "scope": "Behavior admission decisions only; accepted means intent taken, not delivered greeting or physical detection accuracy.",
+        }
 
     def offer(self, event: Event, *, now):
         key = (event.source, event.generation, event.id)
@@ -183,14 +204,19 @@ class BehaviorEngine:
             origin_mode=intent.get("origin_mode"),
         )
 
-    def invalidate_source(self, source, generation):
+    def invalidate_source(self, source, generation, *, now=None):
         if (
             self.pending
             and self.pending["event"].source == source
             and self.pending["event"].generation != generation
         ):
+            self._record(
+                self.pending["event"], "source_invalidated", time.time() if now is None else now
+            )
             self.pending = None
 
     def interrupt(self, *, now, backoff=60):
+        if self.pending:
+            self._record(self.pending["event"], "canceled_by_interruption", now)
         self.pending = None
         self.backoff_until = now + backoff

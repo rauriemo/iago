@@ -1,0 +1,46 @@
+name: Iago offline acceptance
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline:
+    runs-on: windows-2025
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      UV_LOCKED: "true"
+      IAGO_DEVELOPMENT_BUDGET: "0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.11.15"
+          python-version: "3.12.10"
+      - name: Install locked dependencies
+        run: uv sync --locked --all-extras --dev
+      - name: Install browser
+        run: uv run --all-extras playwright install chromium
+      - name: Download and verify pinned perception models
+        run: uv run --all-extras python -m reachy_brain.vision.detectors --download
+      - name: Lint
+        run: uv run --all-extras ruff check reachy_brain tests
+      - name: Run every offline acceptance check
+        run: uv run --all-extras iago-verify --suite offline --output local-data/evidence/ci-offline
+      - name: Retain acceptance evidence including blockers and failures
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: iago-offline-evidence
+          path: local-data/evidence/ci-offline/
+          if-no-files-found: warn
+          retention-days: 14

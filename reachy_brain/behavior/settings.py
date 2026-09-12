@@ -41,6 +41,9 @@ class BehaviorSettings(BaseModel):
     quiet_end: str = Field(default="", pattern=r"^(?:[01]\d|2[0-3]):[0-5]\d$|^$")
     interruption_backoff: float = Field(default=60, ge=0, le=3600)
     conversation_window: float = Field(default=30, ge=5, le=300)
+    presence_confirmation: float = Field(default=0.7, ge=0.1, le=10)
+    presence_absence: float = Field(default=3, ge=0.1, le=60)
+    presence_rearm: float = Field(default=15, ge=0, le=3600)
     rules: list[RuleSettings] = Field(max_length=32)
 
     @model_validator(mode="after")

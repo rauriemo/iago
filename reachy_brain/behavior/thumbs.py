@@ -151,6 +151,7 @@ class ThumbController:
             self.candidate = {
                 "gesture": event.gesture,
                 "start": event.captured,
+                "uncertainty": event.uncertainty,
                 "frames": list(event.frames),
                 "events": [event.id],
             }
@@ -159,6 +160,7 @@ class ThumbController:
             dict.fromkeys(self.candidate["frames"] + list(event.frames))
         )[:8]
         self.candidate["events"] = list(dict.fromkeys(self.candidate["events"] + [event.id]))[-8:]
+        self.candidate["uncertainty"] = max(self.candidate["uncertainty"], event.uncertainty)
         if event.captured - self.candidate["start"] < self.stability:
             return self._reject("stabilizing", event)
         self.pending = {
@@ -177,6 +179,11 @@ class ThumbController:
             "detector": event.detector,
             "source": event.source,
             "generation": event.generation,
+            "recognized": now,
+            "timing": {
+                "recognition_seconds": now - self.candidate["start"],
+                "source_uncertainty_seconds": self.candidate["uncertainty"],
+            },
             "ready": now + self.arbitration,
         }
         self.armed = False
@@ -199,6 +206,7 @@ class ThumbController:
         if self._overlap(pending["start"], pending["captured"]):
             self._reject("speech_priority", rearm=True)
             return None
+        pending["timing"]["arbitration_seconds"] = now - pending["recognized"]
         self.question = None
         self.accepted.append(pending)
         self.feedback.append(

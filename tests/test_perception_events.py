@@ -84,3 +84,31 @@ def test_unknown_capture_timing_cannot_associate_gestures():
     assert not observation.associated and observation.uncertainty == 1.0
     result["uncertainty"] = float("nan")
     assert PerceptionEvents().update(result, source, now=10) == ([], None)
+
+
+@pytest.mark.features("V5", "P3", "P10")
+@pytest.mark.scenario("DETECTOR-SEQUENCE-EVENT-REPLAY")
+def test_replayed_sequence_cannot_accumulate_new_temporal_evidence():
+    interpreter = PerceptionEvents()
+    source = SimpleNamespace(id="camera", kind="camera", generation=0, enabled=True)
+
+    def result(at, sequence):
+        return {
+            "source": "camera",
+            "generation": source.generation,
+            "captured": at,
+            "sequence": sequence,
+            "objects_at": at,
+            "objects": [],
+            "hands": [],
+            "moving": False,
+            "detector": "synthetic",
+        }
+
+    assert interpreter.update(result(10, 2), source, now=10)[1] is not None
+    for sequence in (2, 1, None, True, "private"):
+        assert interpreter.update(result(10.1, sequence), source, now=10.1) == ([], None)
+        assert interpreter.last == 10
+    assert interpreter.update(result(10.2, 3), source, now=10.2)[1] is not None
+    source.generation = 1
+    assert interpreter.update(result(10.3, 1), source, now=10.3)[1] is not None

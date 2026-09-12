@@ -12,7 +12,7 @@ from reachy_brain.web.app import create_app
 
 @pytest.mark.features("C1", "C2", "P7", "D5")
 @pytest.mark.scenario("RECOGNITION-LOSS-AWARE")
-@pytest.mark.parametrize("error", [False, True])
+@pytest.mark.parametrize("error", [False, True, "overflow"])
 def test_recognition_eof_and_error_stop_cloud_input(tmp_path, monkeypatch, error):
     providers = []
 
@@ -27,8 +27,15 @@ def test_recognition_eof_and_error_stop_cloud_input(tmp_path, monkeypatch, error
 
         async def events(self):
             await asyncio.sleep(0.1)
-            if error:
+            if error is True:
                 raise RuntimeError("synthetic_disconnect")
+            if error == "overflow":
+                for i in range(33):
+                    yield {
+                        "type": "conversation.item.input_audio_transcription.completed",
+                        "item_id": f"synthetic-{i}",
+                        "transcript": "Synthetic unmatched final",
+                    }
             return
             yield  # This is an async iterator that ends without a final transcript.
 
@@ -58,6 +65,7 @@ def test_recognition_eof_and_error_stop_cloud_input(tmp_path, monkeypatch, error
             assert providers[0].closed
             assert app.state.active["conversation"].mode == "aware"
             assert app.state.active["stt"] is None
+            assert not app.state.active["conversation"].pending_input
             audio.send_bytes(bytes(960))
             control.send_json({"type": "heartbeat"})
             # Drain the loss state/error and reach the control barrier.

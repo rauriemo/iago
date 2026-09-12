@@ -1,16 +1,42 @@
+import {BrowserClock, audioTiming} from './clock.js';
+import {captureFrame} from './capture.js';
+import {sendControl, controlDeliverySnapshot} from './control_delivery.js';
+import {evidenceView} from './evidence.js';
+import {installHistory} from './history.js';
 const $=id=>document.getElementById(id);
 const token=new URLSearchParams(location.hash.slice(1)).get('token')||sessionStorage.getItem('iago-token');
 if(token)sessionStorage.setItem('iago-token',token);history.replaceState(null,'',location.pathname);
 let control,audio,ctx,worklet,mic,mode='idle',activeAnswer=null,speechFailed=false,lastHeartbeat=performance.now(),perceptionEnabled=false,deployment='desktop';
+const captureClock=new BrowserClock();
 const sources=new Map(),heardTimers=new Set(),objectURLs=new Set();
 const notice=text=>{$('notice').textContent=text;};
-const send=m=>{if(control?.readyState===WebSocket.OPEN)control.send(JSON.stringify(m));};
+const send=m=>{if(m.type==='robot_camera'&&m.enabled===false)window.dispatchEvent(new Event('iago-visual-change'));sendControl(control,m);};
 async function api(path,options={}){
  const r=await fetch(path,{...options,headers:{Authorization:`Bearer ${token}`,...options.headers}});
  if(!r.ok){let message;try{message=await r.json();}catch{message={detail:r.statusText};}throw Error(message.detail||message.error||`HTTP ${r.status}`);}
  return r;
 }
-const post=async(path,data)=>(await api(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})).json();
+let visualClearVersion=0;
+const post=async(path,data)=>{if(path==='/api/visual'&&data.action==='clear')visualClearVersion++;if(path==='/api/visual'&&['clear','off'].includes(data.action))window.dispatchEvent(new Event('iago-visual-change'));const result=await (await api(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})).json();if(path==='/api/visual'&&['pin','unpin'].includes(data.action))window.dispatchEvent(new Event('iago-visual-pin-change'));return result;};
+let spokenReferenceRequest=null,spokenReferenceToken=null;
+function clearSpokenReference(){
+ if(spokenReferenceRequest||spokenReferenceToken){spokenReferenceRequest=crypto.randomUUID();send({type:'speech_reference',frame:null,request:spokenReferenceRequest});}
+ spokenReferenceToken=null;$('spokenHistorySelection').textContent='';$('forgetSpokenHistory').hidden=true;
+}
+$('forgetSpokenHistory').onclick=clearSpokenReference;
+window.addEventListener('iago-history-unselected',clearSpokenReference);
+window.addEventListener('iago-history-spoken',event=>{
+ if(mode!=='conversation'){notice('Start Conversation, then choose an image before speaking.');return;}
+ forgetHistorySelection();spokenReferenceRequest=crypto.randomUUID();spokenReferenceToken=null;
+ $('spokenHistorySelection').textContent='Selecting image for your next spoken question…';$('forgetSpokenHistory').hidden=false;
+ send({type:'speech_reference',frame:event.detail.id,region:event.detail.region,request:spokenReferenceRequest});
+});
+let selectedHistory=null;
+function forgetHistorySelection(){selectedHistory=null;$('historySelection').textContent='';$('forgetHistorySelection').hidden=true;}
+window.addEventListener('iago-history-unselected',forgetHistorySelection);
+window.addEventListener('iago-history-selected',event=>{clearSpokenReference();selectedHistory=event.detail;$('historySelection').textContent=`For your next typed question: ${selectedHistory.label}`;$('forgetHistorySelection').hidden=false;});
+$('forgetHistorySelection').onclick=forgetHistorySelection;
+installHistory(api,post);
 function turn(who,text){const el=document.createElement('div');el.className=`turn ${who}`;const label=document.createElement('span');label.className='who';label.textContent=who==='user'?'You':'Iago';const content=document.createElement('span');content.textContent=text;el.append(label,content);$('transcript').append(el);el.scrollIntoView({block:'nearest'});return content;}
 function clearHeard(){for(const t of heardTimers)clearTimeout(t);heardTimers.clear();}
 function stop(){clearHeard();worklet?.port.postMessage({type:'stop'});if(!worklet)send({type:'stop'});}
@@ -44,7 +70,7 @@ async function enumerate(){
 let audioSetup=null,pendingAudio=null,audioGeneration=0,modeRequest=0;
 function closeAudioResources(owned){
  if(!owned)return;
- owned.mic?.getTracks().forEach(track=>track.stop());
+ owned.mic?.getTracks().forEach(track=>{track.onended=null;track.stop();});
  if(owned.worklet){owned.worklet.port.onmessage=null;owned.worklet.disconnect();}
  if(owned.audio){owned.audio.onclose=null;owned.audio.onopen=null;owned.audio.close();}
  if(owned.ctx&&owned.ctx.state!=='closed')owned.ctx.close().catch(()=>{});
@@ -64,8 +90,15 @@ async function setupAudio(){
  const current=()=>{if(generation!==audioGeneration)throw Error('Audio setup canceled.');};
  const operation=(async()=>{
  try{
+ await captureClock.refresh(api);current();
  for(const id of ['microphone','speaker'])if($(id).selectedOptions[0]?.dataset.unavailable)throw Error('A saved audio device is unavailable. Choose another device before starting.');
  owned.mic=await navigator.mediaDevices.getUserMedia({audio:{deviceId:$('microphone').value?{exact:$('microphone').value}:undefined,echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false});current();
+ owned.mic.getTracks().forEach(track=>{track.onended=()=>{
+  if(generation!==audioGeneration)return;
+  stop();releaseAudio();
+  $('audioSetupStatus').textContent='Audio setup failed: Microphone disconnected. Choose an available device and restart conversation.';
+  notice('Microphone disconnected. Choose an available device and restart conversation.');
+ };});
  owned.ctx=new AudioContext();await owned.ctx.resume();current();
  if(owned.ctx.setSinkId&&$('speaker').value){await owned.ctx.setSinkId($('speaker').value);current();}
  await owned.ctx.audioWorklet.addModule('/static/audio-worklet.js');current();
@@ -75,10 +108,11 @@ async function setupAudio(){
   if(generation!==audioGeneration||audio!==owned.audio)return;
   if(m.type==='capture'&&mode==='conversation'&&audio?.readyState===1){if(audio.bufferedAmount>12000){stop();notice('Audio connection is too slow; restart conversation.');return;}audio.send(m.pcm.buffer);}
   if(m.type==='local_stop'){clearHeard();send({type:'stop',generation:m.generation});}
-  if(m.type==='commit'&&mode==='conversation'&&audio?.readyState===1){const marker={type:'commit'},offset=Date.now()/1000-owned.ctx.currentTime;if(Number.isFinite(m.start)&&Number.isFinite(m.end)&&m.start<=m.end){marker.capture_start=offset+m.start;marker.capture_end=offset+m.end;}audio.send(JSON.stringify(marker));}
-  if(m.type==='speech_start')send({type:'speech_start',captured:Date.now()/1000-Math.max(0,owned.ctx.currentTime-m.at)});
+  if(m.type==='commit'&&mode==='conversation'&&audio?.readyState===1){const marker={type:'commit'},timing=audioTiming(captureClock,owned.ctx,m.start,m.end);if(timing){marker.capture_start=timing.capture_start;marker.capture_end=timing.capture_end;marker.capture_clock_uncertainty=timing.clock_uncertainty;}audio.send(JSON.stringify(marker));}
+  if(m.type==='speech_start'){const timing=audioTiming(captureClock,owned.ctx,m.at);send(timing?{type:'speech_start',captured:timing.capture_start,clock_uncertainty:timing.clock_uncertainty}:{type:'speech_start',timing_unknown:true});}
   if(m.type==='played')send(m);
   if(m.type==='overflow')notice('Playback buffering exceeded its limit; speech stopped.');
+  if(m.type==='invalid_audio')notice('Invalid playback audio received; speech stopped.');
   if(m.type==='consumed'){const timer=setTimeout(()=>{heardTimers.delete(timer);send({type:'heard',epoch:m.epoch,segment:m.segment});},1000*((owned.ctx.outputLatency||.1)+(owned.ctx.baseLatency||.01)+.05));heardTimers.add(timer);}
  };
 
@@ -115,14 +149,14 @@ function connect(){
  if(!token){notice('Launch Iago with its local launcher to authorize this page.');return;}
  control=new WebSocket(`${location.origin.replace('http','ws')}/control`);
  control.onopen=()=>control.send(token);
- control.onclose=()=>{stop();modeRequest++;releaseAudio();mode='idle';settingsAudio();for(const s of sources.values())s.stream?.getTracks().forEach(t=>t.stop());notice('Local session disconnected. Relaunch or reload to reconnect.');};
+ control.onclose=()=>{captureClock.reset();window.dispatchEvent(new Event('iago-visual-change'));stop();modeRequest++;releaseAudio();mode='idle';settingsAudio();for(const s of sources.values())s.stream?.getTracks().forEach(t=>t.stop());notice('Local session disconnected. Relaunch or reload to reconnect.');};
  control.onmessage=({data})=>{const m=JSON.parse(data);
   if(m.type==='robot_connection')notice(m.status==='connected_idle'?'Robot reconnected in Idle. Choose Aware or Conversation.':`Robot connection: ${m.status}`);
   if(m.type==='robot_motion')$('robotMotion').checked=m.enabled;
   if(m.type==='robot_camera'){$('robotCamera').dataset.enabled=String(m.enabled);$('robotCamera').textContent=m.enabled?'Reachy camera off':'Reachy camera on';refresh();}
   if(m.type==='heartbeat'){lastHeartbeat=performance.now();worklet?.port.postMessage({type:'heartbeat'});}
-  if(m.type==='ready'){deployment=m.deployment||'desktop';$('projectFolderLabel').textContent=deployment==='reachy_local'?'Folder on the robot':'Folder on this PC';$('projectRoot').placeholder=deployment==='reachy_local'?'/home/reachy/projects/my-project':'C:\\Projects\\my-project';$('robotMotionPanel').hidden=deployment==='desktop';$('robotMotion').checked=!!m.robot_motion_enabled;$('robotCamera').hidden=deployment==='desktop';$('robotCamera').dataset.enabled=String(m.robot_camera_enabled!==false);$('robotCamera').textContent=m.robot_camera_enabled===false?'Reachy camera on':'Reachy camera off';if(m.audio_settings){$('mute').checked=m.audio_settings.muted;$('patient').checked=m.audio_settings.patient;$('volume').value=m.audio_settings.volume;}notice('Ready. Start a conversation or enable local awareness.');refresh();}
-  if(m.type==='state'){refreshVoice();mode=m.mode;$('state').textContent=`${mode} · ${m.voice}`;settingsAudio();notice($('audioSetupStatus').textContent.startsWith('Audio setup failed')?$('audioSetupStatus').textContent:m.voice_reason||'');}
+  if(m.type==='ready'){deployment=m.deployment||'desktop';$('projectFolderLabel').textContent=deployment==='reachy_local'?'Folder on the robot':'Folder on this PC';$('projectRoot').placeholder=deployment==='reachy_local'?'/home/reachy/projects/my-project':'C:\\Projects\\my-project';$('robotMotionPanel').hidden=deployment==='desktop';$('robotMotion').checked=!!m.robot_motion_enabled;$('robotCamera').hidden=deployment==='desktop';$('robotLookNow').hidden=deployment==='desktop';$('robotCamera').dataset.enabled=String(m.robot_camera_enabled!==false);$('robotCamera').textContent=m.robot_camera_enabled===false?'Reachy camera on':'Reachy camera off';if(m.audio_settings){$('mute').checked=m.audio_settings.muted;$('patient').checked=m.audio_settings.patient;$('volume').value=m.audio_settings.volume;}notice('Ready. Start a conversation or enable local awareness.');refresh();}
+  if(m.type==='state'){if(m.mode!=='conversation')window.dispatchEvent(new Event('iago-history-unselected'));refreshVoice();mode=m.mode;$('state').textContent=`${mode} · ${m.voice}`;settingsAudio();notice($('audioSetupStatus').textContent.startsWith('Audio setup failed')?$('audioSetupStatus').textContent:m.voice_reason||'');}
   if(m.type==='stop'){clearHeard();worklet?.port.postMessage({type:'remote_stop'});}
   if(m.type==='authorize')worklet?.port.postMessage(m);
   if(m.type==='audio'){const binary=atob(m.pcm),buf=new ArrayBuffer(binary.length),bytes=new Uint8Array(buf);for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);worklet?.port.postMessage({...m,pcm:new Int16Array(buf)},[buf]);}
@@ -135,54 +169,126 @@ function connect(){
   if(m.type==='transcript_partial')notice(`Hearing: ${m.text}`);
   if(m.type==='speech_error')speechFailed=true;
   if(m.type==='error'||m.type==='speech_error')notice(m.message);
+  if(m.type==='error'&&spokenReferenceRequest&&!spokenReferenceToken){spokenReferenceRequest=null;$('spokenHistorySelection').textContent='Spoken reference was not selected. Please try again.';$('forgetSpokenHistory').hidden=true;}
   if(m.type==='voice_preview')$('voiceStatus').textContent=m.status==='failed'?'Voice preview failed. No other voice was substituted.':`${m.provider} preview: ${m.status==='queued'?'queued for playback':'preparing speech'}`;
   if(m.type==='active_question')$('thumbQuestion').textContent=m.text;
   if(m.type==='stop')$('thumbQuestion').textContent='No active question';
   if(m.type==='gesture_superseded'){for(const el of document.querySelectorAll('[data-gesture-slot]'))if(el.dataset.gestureSlot===m.slot)el.remove();}
   if(m.type==='confirmation')showConfirmation(m.proposal);
   if(m.type==='stop')$('confirmations').replaceChildren();
+  if(m.type==='speech_reference'){
+   if(m.status==='bound'&&m.token===spokenReferenceToken){spokenReferenceToken=null;spokenReferenceRequest=null;$('spokenHistorySelection').textContent='Selected image attached to this spoken turn.';$('forgetSpokenHistory').hidden=true;}
+   else if(m.request===spokenReferenceRequest){
+    if(m.status==='armed'){spokenReferenceToken=m.token;$('spokenHistorySelection').textContent=`Ready for your next spoken question: ${m.frame.source_label}. Start speaking after this message.`;}
+    else{spokenReferenceToken=null;spokenReferenceRequest=null;$('spokenHistorySelection').textContent='';$('forgetSpokenHistory').hidden=true;}
+   }
+  }
+  if(m.type==='evidence_cleared')window.dispatchEvent(new Event('iago-visual-change'));
   if(m.type==='evidence')showEvidence(m.frames);
  };
 }
 function sourceOptions(){const chosen=$('source').value;$('source').replaceChildren(new Option('No selected source',''));for(const s of sources.values())$('source').add(new Option(`${s.kind}: ${s.label}`,s.id));if(sources.has(chosen))$('source').value=chosen;else if(sources.size===1)$('source').value=sources.keys().next().value;}
+const startingSources=new Set();
 async function startSource(kind){
  if(mode==='idle'){notice('Enable Aware or start a conversation before sharing.');return;}
+ if(startingSources.has(kind))return;
+ startingSources.add(kind);
+ const request=modeRequest;
+ let stream,source;
+ const valid=()=>request===modeRequest&&mode!=='idle'&&control?.readyState===1;
  try{
   const existing=[...sources.values()].find(s=>s.kind===kind);if(existing){await stopSource(existing.id);return;}
-  const stream=kind==='screen'?await navigator.mediaDevices.getDisplayMedia({video:true,audio:false}):await navigator.mediaDevices.getUserMedia({video:{deviceId:$('cameraDevice').value?{exact:$('cameraDevice').value}:undefined,width:{ideal:1920},height:{ideal:1080}},audio:false});
+  stream=kind==='screen'?await navigator.mediaDevices.getDisplayMedia({video:true,audio:false}):await navigator.mediaDevices.getUserMedia({video:{deviceId:$('cameraDevice').value?{exact:$('cameraDevice').value}:undefined,width:{ideal:1920},height:{ideal:1080}},audio:false});
+  if(!valid())throw new Error('Capture start canceled.');
   stream.getAudioTracks().forEach(t=>{t.stop();stream.removeTrack(t);});
-  const source=await post('/api/source',{kind,label:stream.getVideoTracks()[0].label||kind});source.stream=stream;sources.set(source.id,source);
+  source=await post('/api/source',{kind,label:Array.from(stream.getVideoTracks()[0].label||kind).slice(0,120).join('')});source.stream=stream;sources.set(source.id,source);
+  if(!valid())throw new Error('Capture start canceled.');
   const figure=document.createElement('figure'),video=document.createElement('video'),caption=document.createElement('figcaption'),off=document.createElement('button');video.autoplay=true;video.muted=true;video.playsInline=true;video.srcObject=stream;off.textContent='Stop';off.onclick=()=>stopSource(source.id);caption.append(document.createTextNode(`${kind}: ${source.label}`),off);figure.append(video,caption);source.figure=figure;$('previews').querySelector('.empty')?.remove();$('previews').append(figure);await video.play();
-  source.video=video;source.canvas=document.createElement('canvas');source.busy=false;source.timer=setInterval(()=>capture(source),1000);source.detectorTimer=kind==='camera'?setInterval(()=>detect(source),100):null;stream.getVideoTracks()[0].onended=()=>stopSource(source.id);sourceOptions();capture(source);
- }catch(e){notice(`${kind}: ${e.message}`);}
+  if(!valid()||!sources.has(source.id)||stream.getVideoTracks()[0].readyState!=='live')throw new Error('Capture start canceled.');
+  source.captureStatus=document.createElement('p');source.captureStatus.className='muted';figure.append(source.captureStatus);source.video=video;source.canvas=document.createElement('canvas');source.busy=false;source.timer=setInterval(()=>capture(source),1000);source.detectorTimer=kind==='camera'?setInterval(()=>detect(source),100):null;stream.getVideoTracks()[0].onended=()=>stopSource(source.id);sourceOptions();capture(source);
+ }catch(e){
+  stream?.getTracks().forEach(t=>{t.onended=null;t.stop();});
+  if(source)await stopSource(source.id);
+  if(request===modeRequest)notice(`${kind}: ${e.message}`);
+ }finally{startingSources.delete(kind);}
 }
-async function capture(source){
- if(source.busy||!sources.has(source.id)||!source.video.videoWidth)return;source.busy=true;
- try{const v=source.video,c=source.canvas;c.width=v.videoWidth;c.height=v.videoHeight;c.getContext('2d').drawImage(v,0,0);const at=Date.now()/1000,generation=source.generation;const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',.92));if(blob&&sources.has(source.id))await api(`/api/frame/${source.id}/${generation}`,{method:'POST',headers:{'X-Captured-At':String(at)},body:blob});}catch(e){notice(e.message);}finally{source.busy=false;}
+async function capture(source){return captureFrame(source,sources,api,notice,captureClock);}
+$('robotLookNow').onclick=async()=>{
+ const request=modeRequest,visualVersion=visualClearVersion;
+ const valid=()=>request===modeRequest&&visualVersion===visualClearVersion&&mode!=='idle';
+ if(!valid()){notice('Enable Aware or Conversation before capture.');return;}
+ $('robotLookNow').disabled=true;
+ try{
+  const frame=await post('/api/capture',{});
+  if(!valid())return;
+  window.dispatchEvent(new CustomEvent('iago-history-selected',{detail:{id:frame.id,label:`${frame.source_label} · new capture`}}));
+  notice('Reachy image selected for your next typed question.');refresh();
+ }catch(error){if(valid())notice(error.message);}
+ finally{$('robotLookNow').disabled=false;}
+};
+$('lookNow').onclick=async()=>{
+ const source=sources.get($('source').value);
+ if(!source?.video||!['camera','screen'].includes(source.kind)){notice('Select a live PC camera or screen for Look now.');return;}
+ const request=modeRequest,visualVersion=visualClearVersion,generation=source.generation;
+ const valid=()=>request===modeRequest&&visualVersion===visualClearVersion&&sources.get(source.id)===source&&source.generation===generation&&mode!=='idle';
+ $('lookNow').disabled=true;
+ try{
+  const deadline=performance.now()+2000;
+  while(source.busy&&valid()&&performance.now()<deadline)await new Promise(resolve=>setTimeout(resolve,25));
+  if(!valid())return;
+  const frame=await capture(source);
+  if(!valid())return;
+  if(!frame){notice('Fresh capture unavailable. Try Look now again when the source is ready.');return;}
+  window.dispatchEvent(new CustomEvent('iago-history-selected',{detail:{id:frame.id,label:`${source.label} · fresh capture`}}));
+  notice('Fresh image selected for your next typed question.');refresh();
+ }catch(error){if(valid())notice(error.message);}
+ finally{$('lookNow').disabled=false;}
+};
+async function stopSource(id){const source=sources.get(id);if(!source)return;sources.delete(id);source.captureAbort?.abort();source.detectorAbort?.abort();clearInterval(source.timer);clearInterval(source.detectorTimer);source.stream?.getTracks().forEach(t=>{t.onended=null;t.stop();});source.figure?.remove();sourceOptions();try{await post('/api/visual',{action:'off',source:id});}catch(e){notice(e.message);}refresh();}
+let refreshVersion=0,refreshAbort;
+const recentExpiryTimers=new Set();
+function clearRecentImages(){
+ refreshVersion++;refreshAbort?.abort();
+ for(const timer of recentExpiryTimers)clearTimeout(timer);recentExpiryTimers.clear();
+ for(const url of objectURLs)URL.revokeObjectURL(url);
+ objectURLs.clear();$('history').replaceChildren();
 }
-async function stopSource(id){const source=sources.get(id);if(!source)return;sources.delete(id);clearInterval(source.timer);clearInterval(source.detectorTimer);source.stream?.getTracks().forEach(t=>{t.onended=null;t.stop();});source.figure?.remove();sourceOptions();try{await post('/api/visual',{action:'off',source:id});}catch(e){notice(e.message);}refresh();}
-async function refresh(){try{const data=await(await api('/api/status')).json();perceptionEnabled=data.perception.enabled;$('thumbEnabled').checked=data.thumbs.enabled;$('thumbFeedback').textContent=data.thumbs.feedback.at(-1)?.reason||'';if(!data.thumbs.question)$('thumbQuestion').textContent='No active question';$('perception').textContent=data.perception.error?`Perception unavailable: ${data.perception.error}`:data.perception.latest?`${data.perception.latest.effective_fps.toFixed(1)} analyzed fps - ${data.perception.latest.objects.map(o=>o.label).join(', ')||'No supported objects'} - ${data.perception.latest.hands.map(h=>h.gesture).join(', ')||'No hands'}`:perceptionEnabled?'Local perception ready for camera frames':'Local perception disabled';$('diagnostics').textContent=JSON.stringify({brain:data.settings.brain_model,voice:data.settings.tts_provider,limits:data.provider_limits,storage:data.storage,resources:data.resources,project_timings:data.project_timings,costs:data.costs},null,2);$('storage').textContent=`${data.storage.frames} frames · ${(data.storage.rolling_bytes/1048576).toFixed(1)} MiB rolling · ${data.storage.pins} pins`;for(const url of objectURLs)URL.revokeObjectURL(url);objectURLs.clear();$('history').replaceChildren();for(const f of data.history.frames.slice(0,12)){const tile=document.createElement('div');tile.className='frame';const img=document.createElement('img');img.alt=`${f.source_label} at ${new Date(f.captured*1000).toLocaleTimeString()}`;const blob=await(await api(`/api/frame/${f.id}?thumbnail=true`)).blob();const url=URL.createObjectURL(blob);objectURLs.add(url);img.src=url;const label=document.createElement('div');label.textContent=`${f.source_kind} · ${new Date(f.captured*1000).toLocaleTimeString()}`;const pin=document.createElement('button');pin.textContent=f.pin?'Unpin':'Keep';pin.onclick=async()=>{try{await post('/api/visual',{action:f.pin?'unpin':'pin',frame:f.id,label:'Reference'});refresh();}catch(e){notice(e.message);}};tile.append(img,label,pin);$('history').append(tile);}}catch(e){notice(e.message);}}
+window.addEventListener('iago-visual-change',clearRecentImages);
+window.addEventListener('iago-visual-pin-change',()=>{clearRecentImages();refresh();});
+window.addEventListener('pagehide',clearRecentImages);
+$('end').addEventListener('click',clearRecentImages);
+async function refresh(){const version=++refreshVersion;refreshAbort?.abort();const pending=new AbortController();refreshAbort=pending;try{const data=await(await api('/api/status',{signal:pending.signal})).json();if(version!==refreshVersion)return;perceptionEnabled=data.perception.enabled;$('thumbEnabled').checked=data.thumbs.enabled;$('thumbFeedback').textContent=data.thumbs.feedback.at(-1)?.reason||'';if(!data.thumbs.question)$('thumbQuestion').textContent='No active question';$('perception').textContent=data.perception.error?`Perception unavailable: ${data.perception.error}`:data.perception.latest?`${data.perception.latest.effective_fps.toFixed(1)} analyzed fps - ${data.perception.latest.objects.map(o=>o.label).join(', ')||'No supported objects'} - ${data.perception.latest.hands.map(h=>h.gesture).join(', ')||'No hands'}`:perceptionEnabled?'Local perception ready for camera frames':'Local perception disabled';$('diagnostics').textContent=JSON.stringify({brain:data.settings.brain_model,voice:data.settings.tts_provider,limits:data.provider_limits,storage:data.storage,resources:data.resources,perception_health:data.perception.worker,detector_browser:detectorSnapshot(),control_delivery:controlDeliverySnapshot(),project_timings:data.project_timings,response_timings:data.response_timings,costs:data.costs},null,2);$('storage').textContent=`${data.storage.frames} frames · ${(data.storage.rolling_bytes/1048576).toFixed(1)} MiB rolling · ${data.storage.pins} pins · ${data.storage.earliest_rolling_capture==null?'No rolling images retained':`Retained ${new Date(data.storage.earliest_rolling_capture*1000).toLocaleTimeString()} – ${new Date(data.storage.latest_rolling_capture*1000).toLocaleTimeString()} (gaps possible)`}`;for(const timer of recentExpiryTimers)clearTimeout(timer);recentExpiryTimers.clear();for(const url of objectURLs)URL.revokeObjectURL(url);objectURLs.clear();$('history').replaceChildren();for(const f of data.history.frames.slice(0,12)){const tile=document.createElement('div');tile.className='frame';const img=document.createElement('img');img.alt=`${f.source_label} at ${new Date(f.captured*1000).toLocaleTimeString()}`;const started=performance.now(),response=await api(`/api/frame/${f.id}?thumbnail=true`,{signal:pending.signal}),expiry=response.headers.get('X-Iago-Expires-In');if(expiry!=='pinned'&&(expiry==null||!Number.isFinite(Number(expiry))))throw Error('Image expiry unavailable');const blob=await response.blob();if(version!==refreshVersion)return;const remaining=expiry==='pinned'?null:Number(expiry)*1000-(performance.now()-started);if(remaining!==null&&remaining<=0)continue;const url=URL.createObjectURL(blob);objectURLs.add(url);img.src=url;const label=document.createElement('div');label.textContent=`${f.source_kind} · ${new Date(f.captured*1000).toLocaleTimeString()}`;const pin=document.createElement('button');pin.textContent=f.pin?'Unpin':'Keep';pin.onclick=async()=>{try{await post('/api/visual',{action:f.pin?'unpin':'pin',frame:f.id,label:'Reference'});refresh();}catch(e){notice(e.message);}};tile.append(img,label,pin);$('history').append(tile);if(remaining!==null){const timer=setTimeout(()=>{recentExpiryTimers.delete(timer);objectURLs.delete(url);URL.revokeObjectURL(url);tile.remove();},Math.min(remaining,2147483647));recentExpiryTimers.add(timer);}}}catch(e){if(version===refreshVersion&&e.name!=='AbortError')notice(e.message);}}
 $('start').onclick=()=>setMode('conversation');$('aware').onclick=()=>setMode('aware');$('end').onclick=()=>setMode('idle');$('stop').onclick=stop;$('commit').onclick=()=>{if(deployment==='desktop')worklet?.port.postMessage({type:'finish'});else send({type:'commit'});};
 for(const id of ['mute','patient','volume'])$(id).oninput=()=>{saveDevicePreferences();settingsAudio();};
 for(const id of ['microphone','cameraDevice','speaker'])$(id).onchange=saveDevicePreferences;
 $('camera').onclick=()=>startSource('camera');$('screen').onclick=()=>startSource('screen');
-$('ask').onsubmit=e=>{e.preventDefault();if(mode!=='conversation'){notice('Start conversation first.');return;}const text=$('question').value;if(text.trim()){send({type:'user',text,source:$('source').value});$('question').value='';}};
-$('clear').onclick=async()=>{try{const data=await post('/api/visual',{action:'clear'});for(const s of data.sources)if(sources.has(s.id))sources.get(s.id).generation=s.generation;refresh();}catch(e){notice(e.message);}};
-async function upload(file){if(mode==='idle'){notice('Enable Aware or Conversation before adding an image.');return;}try{const s=await post('/api/source',{kind:'upload',label:file.name||'Pasted image'});sources.set(s.id,s);await api(`/api/frame/${s.id}/${s.generation}`,{method:'POST',headers:{'X-Captured-At':String(Date.now()/1000)},body:file});sourceOptions();refresh();}catch(e){notice(e.message);}}
-$('upload').onchange=e=>{if(e.target.files[0])upload(e.target.files[0]);};document.addEventListener('paste',e=>{const file=[...e.clipboardData.items].find(i=>i.type.startsWith('image/'))?.getAsFile();if(file)upload(file);});
+$('ask').onsubmit=e=>{e.preventDefault();if(mode!=='conversation'){notice('Start conversation first.');return;}const text=$('question').value;if(text.trim()){send({type:'user',text,source:$('source').value,frame:selectedHistory?.id,region:selectedHistory?.region});forgetHistorySelection();$('question').value='';}};
+$('clear').onclick=async()=>{for(const source of sources.values()){source.captureAbort?.abort();source.detectorAbort?.abort();}try{const data=await post('/api/visual',{action:'clear'});for(const s of data.sources)if(sources.has(s.id))sources.get(s.id).generation=s.generation;refresh();}catch(e){notice(e.message);}};
+let uploadPending=false;
+async function upload(file){
+ if(mode==='idle'){notice('Enable Aware or Conversation before adding an image.');return;}
+ if(uploadPending){notice('An image is already being added. Please wait.');return;}
+ uploadPending=true;
+ const request=modeRequest,visualVersion=visualClearVersion;
+ let source;
+ try{
+  source=await post('/api/source',{kind:'upload',label:Array.from(file.name||'Pasted image').slice(0,120).join('')});
+  sources.set(source.id,source);
+  if(request!==modeRequest||visualVersion!==visualClearVersion||mode==='idle')throw new Error('Image upload canceled.');
+  await api(`/api/frame/${source.id}/${source.generation}`,{method:'POST',headers:{'X-Captured-At':String(Date.now()/1000)},body:file});
+  if(request!==modeRequest||visualVersion!==visualClearVersion||mode==='idle'||!sources.has(source.id))throw new Error('Image upload canceled.');
+  sourceOptions();refresh();
+ }catch(e){
+  if(source)await stopSource(source.id);
+  if(request===modeRequest)notice(e.message);
+ }finally{uploadPending=false;}
+}
+$('upload').onchange=e=>{const file=e.target.files[0];e.target.value='';if(file)upload(file);};document.addEventListener('paste',e=>{const file=[...e.clipboardData.items].find(i=>i.type.startsWith('image/'))?.getAsFile();if(file)upload(file);});
 setInterval(()=>{send({type:'heartbeat'});if(performance.now()-lastHeartbeat>1500)worklet?.port.postMessage({type:'remote_stop'});},250);
-setInterval(()=>{if(control?.readyState===1)refresh();},5000);
+setInterval(()=>{if(control?.readyState===1){refresh();if(ctx&&mode==='conversation')captureClock.refresh(api).catch(()=>{});}},5000);
 window.addEventListener('pagehide',()=>{stop();modeRequest++;releaseAudio();control?.close();});
 let activeProject=null,projectViewVersion=0,projectRefreshRequest=0,documentRequest=0;
-function showEvidence(rows){
-  $('evidence').replaceChildren();
-  for(const row of rows){
-    const p=document.createElement('p');
-    p.textContent=row.path?`${row.project} · ${row.path} · ${row.locator_kind||'locator'} ${row.locator} · revision ${row.revision}`:`${row.source_label} · ${new Date(row.captured*1000).toLocaleString()} · ${row.id}`;
-    $('evidence').append(p);
-    if(row.path&&typeof row.text==='string'){const snippet=document.createElement('blockquote');snippet.textContent=row.text;$('evidence').append(snippet);}
-  }
-}
+const showEvidence=evidenceView(api);
 function showConfirmation(p){const card=document.createElement('div'),label=document.createElement('p'),payload=document.createElement('pre');card.className='panel';label.textContent=`Allow this action? ${p.tool} · account ${p.account}`;payload.textContent=JSON.stringify(p.payload,null,2);card.append(label,payload);for(const [text,approved] of [['Confirm this action',true],['Cancel',false]]){const button=document.createElement('button');button.textContent=text;button.onclick=()=>{send({type:'confirmation',operation_id:p.operation_id,binding:p.binding,approved});card.remove();};card.append(button);}$('confirmations').append(card);setTimeout(()=>card.remove(),Math.max(0,p.expires*1000-Date.now()));}
 function projectError(error){
   const messages={
@@ -240,10 +346,54 @@ async function refreshIntegrations(){try{const data=await(await api('/api/integr
 if(token)refreshIntegrations();
 loadDevicePreferences();enumerate().catch(()=>{});navigator.mediaDevices.addEventListener('devicechange',()=>enumerate().catch(()=>{}));connect();
 
+export function detectorSnapshot(){
+ const now=performance.now();
+ return {enabled:perceptionEnabled,sources:[...sources.values()].filter(source=>source.kind==='camera').map(source=>({
+  source:source.id,generation:source.generation,busy:!!source.detectBusy,
+  width:source.video?.videoWidth||0,height:source.video?.videoHeight||0,
+  ready_state:source.video?.readyState??null,track_state:source.stream?.getVideoTracks()[0]?.readyState??null,
+  phase:source.detectorHealth?.phase||'not_started',
+  phase_seconds:source.detectorHealth?Math.max(0,(now-source.detectorHealth.phaseAt)/1000):null,
+  ticks:source.detectorHealth?.ticks||0,busy_skips:source.detectorHealth?.busySkips||0,
+  submitted:source.detectorHealth?.submitted||0,completed:source.detectorHealth?.completed||0,
+  errors:source.detectorHealth?.errors||0,timeouts:source.detectorHealth?.timeouts||0
+ }))};
+}
 async function detect(source){
- if(!perceptionEnabled||source.detectBusy||!sources.has(source.id)||!source.video.videoWidth)return;
+ const health=source.detectorHealth||(source.detectorHealth={phase:'not_started',phaseAt:performance.now(),ticks:0,busySkips:0,submitted:0,completed:0,errors:0,timeouts:0});
+ health.ticks++;
+ const phase=value=>{if(health.phase!==value){health.phase=value;health.phaseAt=performance.now();}};
+ if(!sources.has(source.id)){phase('removed');return;}
+ if(!perceptionEnabled){phase('disabled');return;}
+ if(source.detectBusy){health.busySkips++;return;}
+ if(!source.video.videoWidth||!source.video.videoHeight){phase('video_unavailable');return;}
  source.detectBusy=true;
- try{const v=source.video,c=source.detectorCanvas||(source.detectorCanvas=document.createElement('canvas'));const ratio=Math.min(1,640/Math.max(v.videoWidth,v.videoHeight));c.width=Math.round(v.videoWidth*ratio);c.height=Math.round(v.videoHeight*ratio);c.getContext('2d').drawImage(v,0,0,c.width,c.height);const at=Date.now()/1000,generation=source.generation;const blob=await new Promise(resolve=>c.toBlob(resolve,'image/jpeg',.8));if(blob&&sources.has(source.id))await api(`/api/perception/${source.id}/${generation}`,{method:'POST',headers:{'X-Captured-At':String(at)},body:blob});}catch(e){notice(e.message);}finally{source.detectBusy=false;}
+ const generation=source.generation,controller=new AbortController();source.detectorAbort=controller;
+ const valid=()=>sources.get(source.id)===source&&source.generation===generation;
+ const deadline=setTimeout(()=>{if(valid())health.timeouts++;controller.abort();},1000);
+ try{
+  phase('clock');
+  if(!captureClock.map()||captureClock.now()-captureClock.sample.received>5)await captureClock.refresh(api);
+  if(!valid()||controller.signal.aborted)return;
+  const clockGeneration=captureClock.generation;
+  if(source.detectorSequenceGeneration!==generation){source.detectorSequenceGeneration=generation;source.detectorSequence=0;}
+  const sequence=++source.detectorSequence;
+  phase('drawing');
+  const v=source.video,c=source.detectorCanvas||(source.detectorCanvas=document.createElement('canvas'));
+  const ratio=Math.min(1,640/Math.max(v.videoWidth,v.videoHeight));
+  c.width=Math.max(1,Math.round(v.videoWidth*ratio));c.height=Math.max(1,Math.round(v.videoHeight*ratio));
+  c.getContext('2d').drawImage(v,0,0,c.width,c.height);
+  const observed=captureClock.now(),mapped=captureClock.map(observed);
+  if(!mapped)throw Error('Detector clock unavailable; waiting for synchronization.');
+  const at=mapped.time;
+  phase('encoding');
+  const blob=await new Promise(resolve=>c.toBlob(resolve,'image/jpeg',.8));
+  if(blob&&valid()&&!controller.signal.aborted&&captureClock.generation===clockGeneration){
+   phase('uploading');health.submitted++;
+   await api(`/api/perception/${source.id}/${generation}`,{method:'POST',headers:{'X-Captured-At':String(at),'X-Frame-Sequence':String(sequence),'X-Clock-Owner':mapped.owner,'X-Source-Monotonic':String(observed),'X-Clock-Uncertainty':String(mapped.uncertainty)},body:blob,signal:controller.signal});
+   if(valid()&&!controller.signal.aborted)health.completed++;
+  }
+ }catch(e){if(valid()&&!controller.signal.aborted){health.errors++;notice(e.message);}}finally{clearTimeout(deadline);if(source.detectorAbort===controller)source.detectorAbort=null;source.detectBusy=false;phase('idle');}
 }
 
 $('thumbEnabled').onchange=async()=>{try{await post('/api/thumbs',{enabled:$('thumbEnabled').checked});}catch(e){notice(e.message);}};
@@ -263,6 +413,7 @@ async function loadBehaviors(){
    row.append(input);parent.append(row);
   }
   field(root,behaviorDraft,'spontaneous','Allow spontaneous interaction');
+  field(root,behaviorDraft,'presence_confirmation','Confirm presence (seconds)');field(root,behaviorDraft,'presence_absence','Confirm absence (seconds)');field(root,behaviorDraft,'presence_rearm','Absence before a new entry greeting (seconds)');
   field(root,behaviorDraft,'quiet_start','Quiet from (HH:MM)');field(root,behaviorDraft,'quiet_end','Quiet until (HH:MM)');
   field(root,behaviorDraft,'interruption_backoff','Pause after interruption (seconds)');field(root,behaviorDraft,'conversation_window','Wait for a reply (seconds)');
   for(const rule of behaviorDraft.rules){const group=document.createElement('fieldset'),title=document.createElement('legend');title.textContent=rule.id;group.append(title);
@@ -296,7 +447,10 @@ async function refreshTranscripts(offset=0){
       download.textContent='Export text';
       download.onclick=async()=>{try{const response=await api(`/api/transcripts/${session.session}/export`),url=URL.createObjectURL(await response.blob()),a=document.createElement('a');a.href=url;a.download=`iago-transcript-${session.session}.txt`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch(e){notice(e.message);}};
       del.textContent='Delete';del.onclick=async()=>{try{await post('/api/transcripts',{action:'delete',session:session.session});await refreshTranscripts();}catch(e){notice(e.message);}};
-      row.append(download,del);$('transcripts').append(row);
+      const structured=document.createElement('button');
+      structured.textContent='Export JSON';
+      structured.onclick=async()=>{try{const response=await api(`/api/transcripts/${session.session}/export?format=json`),url=URL.createObjectURL(await response.blob()),a=document.createElement('a');a.href=url;a.download=`iago-transcript-${session.session}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch(e){notice(e.message);}};
+      row.append(download,structured,del);$('transcripts').append(row);
     }
     if(data.next_offset!==null){const more=document.createElement('button');more.id='transcriptsMore';more.textContent='More sessions';more.onclick=()=>refreshTranscripts(data.next_offset);$('transcripts').append(more);}
   }catch(e){notice(e.message);}
@@ -374,3 +528,6 @@ async function refreshVoiceRecovery(){try{const data=await(await api("/api/voice
 setInterval(()=>{if(token&&$("voiceRecovery").closest("details").open)refreshVoiceRecovery();},5000);
 
 $("exportProjectTimings").onclick=async()=>{try{const response=await api("/api/project-timings"),url=URL.createObjectURL(await response.blob()),link=document.createElement("a");link.href=url;link.download="iago-project-timings.json";link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch(error){notice(error.message);}};
+
+$("exportResponseTimings").onclick=async()=>{try{const response=await api("/api/response-timings"),url=URL.createObjectURL(await response.blob()),link=document.createElement("a");link.href=url;link.download="iago-response-timings.json";link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch(error){notice(error.message);}};
+$("exportSpeechActivity").onclick=async()=>{try{const response=await api("/api/speech-activity"),url=URL.createObjectURL(await response.blob()),link=document.createElement("a");link.href=url;link.download="iago-speech-activity.json";link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch(error){notice(error.message);}};

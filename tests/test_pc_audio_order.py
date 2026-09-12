@@ -12,19 +12,25 @@ from reachy_brain.web.app import create_app
 
 @pytest.mark.features("C1", "C2", "D1")
 @pytest.mark.scenario("PC-MICROPHONE-COMMIT-BARRIER")
-def test_microphone_marker_waits_for_preceding_append(tmp_path, monkeypatch):
+@pytest.mark.parametrize("bound", [None, 0.25])
+def test_microphone_marker_waits_for_preceding_append(tmp_path, monkeypatch, bound):
     calls = []
+    close_observations = []
+    recognizers, late_events = [], []
 
     class STT:
         def __init__(self, *args):
-            pass
+            self.release = asyncio.Event()
+            recognizers.append(self)
 
         async def start(self):
             pass
 
         async def events(self):
+            await self.release.wait()
+            late_events.append("delivered during cleanup")
+            yield {"type": "input_audio_buffer.committed", "item_id": "late-during-disconnect"}
             await asyncio.Event().wait()
-            yield {}
 
         async def append(self, pcm):
             calls.append("append_started")
@@ -35,7 +41,10 @@ def test_microphone_marker_waits_for_preceding_append(tmp_path, monkeypatch):
             calls.append("commit")
 
         async def close(self):
-            pass
+            close_observations.append(
+                (app.state.active["conversation"].mode, app.state.active["audio"] is not None)
+            )
+            await asyncio.sleep(0.05)  # Keep cleanup suspended while the ASGI socket exits.
 
     monkeypatch.setattr("reachy_brain.web.app.Transcription", STT)
     app = create_app(Settings(_env_file=None, data_dir=tmp_path), token="test")
@@ -51,7 +60,10 @@ def test_microphone_marker_waits_for_preceding_append(tmp_path, monkeypatch):
             assert control.receive_json()["mode"] == "conversation"
             audio.send_bytes(bytes(960))
             end = time.time()
-            audio.send_json({"type": "commit", "capture_start": end - 1, "capture_end": end})
+            extra = {} if bound is None else {"capture_clock_uncertainty": bound}
+            audio.send_json(
+                {"type": "commit", "capture_start": end - 1, "capture_end": end, **extra}
+            )
             deadline = time.monotonic() + 2
             while len(calls) < 3 and time.monotonic() < deadline:
                 time.sleep(0.01)
@@ -59,6 +71,20 @@ def test_microphone_marker_waits_for_preceding_append(tmp_path, monkeypatch):
             assert app.state.active["conversation"].recording_commits[0][2] == {
                 "capture_start": end - 1,
                 "capture_end": end,
+                **extra,
             }
+            core = app.state.active["conversation"]
+            original_mode = core.set_mode
+
+            async def cleanup_mode(mode):
+                if mode == "aware":
+                    recognizers[0].release.set()
+                    await asyncio.sleep(0)
+                await original_mode(mode)
+
+            core.set_mode = cleanup_mode
         assert app.state.active["conversation"].mode == "aware"
         assert app.state.active["stt"] is None
+        assert close_observations == [("aware", True)]
+        assert app.state.active["audio"] is None
+        assert late_events == []

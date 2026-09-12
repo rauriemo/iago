@@ -101,10 +101,55 @@ def test_private_opt_in_export_and_scoped_deletion(tmp_path):
         assert response.text == "user (typed):\nIdeia: ação <script>"
         assert response.headers["content-disposition"].startswith("attachment;")
         assert response.headers["cache-control"] == "no-store"
+        assert client.get(url + "?format=json").status_code == 401
+        structured = client.get(url + "?format=json", headers=headers)
+        structured.raise_for_status()
+        exported = structured.json()
+        assert exported["format_version"] == 1 and exported["session"] == session
+        assert len(exported["entries"]) == 1
+        assert exported["entries"][0]["entry"] == "u"
+        assert exported["entries"][0]["text"] == "Ideia: ação <script>"
+        assert exported["entries"][0]["metadata"] == {}
+        assert structured.headers["cache-control"] == "no-store"
+        assert structured.headers["content-type"] == "application/json"
+        assert structured.headers["content-disposition"].endswith('.json"')
+        assert client.get(url + "?format=html", headers=headers).status_code == 400
+        store = Transcripts(tmp_path / "transcripts.sqlite")
+        metadata = {
+            "epoch": 1,
+            "generated_text": "Read label: AX7. More unheard words.",
+            "interrupted": True,
+            "evidence_refs": [
+                {
+                    "kind": "visual",
+                    "id": "frame-1",
+                    "source_id": "camera-1",
+                    "source_generation": 2,
+                    "captured": 100.0,
+                    "image_sha256": "a" * 64,
+                    "capture_time_known": True,
+                    "source_kind": "camera",
+                    "region": [1, 2, 10, 20],
+                }
+            ],
+        }
+        store.record(
+            session,
+            "a1",
+            "assistant",
+            "Read label: AX7.",
+            "heard",
+            generation=store.state()["generation"],
+            metadata=metadata,
+        )
+        answer = client.get(url + "?format=json", headers=headers).json()["entries"][-1]
+        assert answer["entry"] == "a1" and answer["text"] == "Read label: AX7."
+        assert answer["metadata"] == metadata
         client.post(
             "/api/transcripts", headers=headers, json={"action": "delete", "session": session}
         ).raise_for_status()
         assert client.get(url, headers=headers).status_code == 404
+        assert client.get(url + "?format=json", headers=headers).status_code == 404
         assert len(client.get("/api/transcripts", headers=headers).json()["sessions"]) == 1
         client.post(
             "/api/transcripts", headers=headers, json={"action": "enabled", "enabled": False}

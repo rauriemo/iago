@@ -7,12 +7,14 @@ import pytest
 from fastapi.testclient import TestClient
 
 from reachy_brain.config import Settings
+from reachy_brain.integrations.registry import Connection
 from reachy_brain.web.app import create_app
 
 
-@pytest.mark.features("P4", "P5", "P6", "P7", "D4")
+@pytest.mark.features("P4", "P5", "P6", "P7", "D4", "E1")
 @pytest.mark.scenario("TRIGGER-AWARE-TRANSPORT")
-def test_test_event_starts_recognition_greets_and_times_out(tmp_path, monkeypatch):
+@pytest.mark.parametrize("event_source", ["camera", "integration"])
+def test_test_event_starts_recognition_greets_and_times_out(tmp_path, monkeypatch, event_source):
     calls = []
 
     class Brain:
@@ -22,7 +24,8 @@ def test_test_event_starts_recognition_greets_and_times_out(tmp_path, monkeypatc
         async def stream(self, messages, tools):
             calls.append("brain")
             assert "stt_start" in calls
-            assert any("manual-test-event" in str(message) for message in messages)
+            marker = "manual-test-event" if event_source == "camera" else "integration-ingress-v1"
+            assert any(marker in str(message) for message in messages)
             yield {"type": "text", "text": "Hello there."}
 
         async def close(self):
@@ -71,12 +74,30 @@ def test_test_event_starts_recognition_greets_and_times_out(tmp_path, monkeypatc
         with client.websocket_connect("/audio", headers=origin) as audio:
             audio.send_text("test")
             assert audio.receive_json()["type"] == "audio_ready"
-            result = client.post(
-                "/api/behaviors/test",
-                headers=headers,
-                json={"rule": "wave", "source": source["id"]},
-            ).json()
-            assert result["synthetic"] and result["decision"] == "queued"
+            if event_source == "camera":
+                result = client.post(
+                    "/api/behaviors/test",
+                    headers=headers,
+                    json={"rule": "wave", "source": source["id"]},
+                ).json()
+                assert result["synthetic"] and result["decision"] == "queued"
+            else:
+
+                def inject():
+                    app.state.executor.registry.add_connection(Connection("calendar", "synthetic"))
+                    now = time.time()
+                    return app.state.integration_events.offer(
+                        "calendar",
+                        "synthetic",
+                        generation=0,
+                        event_id="synthetic-event",
+                        kind="wave_detected",
+                        occurred=now,
+                        now=now,
+                        payload={"synthetic": True},
+                    )
+
+                assert client.portal.call(inject) == "queued"
             deadline = time.monotonic() + 8
             while time.monotonic() < deadline:
                 if "voice" in calls and app.state.active["conversation"].mode == "aware":
@@ -86,3 +107,17 @@ def test_test_event_starts_recognition_greets_and_times_out(tmp_path, monkeypatc
             assert "stt_close" in calls
             assert app.state.active["conversation"].mode == "aware"
             assert app.state.active["stt"] is None
+            observations = client.get("/api/behaviors", headers=headers).json()["observations"]
+            decisions = [row["decision"] for row in observations["samples"]]
+            assert "accepted" in decisions
+            assert "window_starting" in decisions and "greeting_scheduled" in decisions
+            assert "window_timed_out" in decisions
+            scheduled = next(
+                row for row in observations["samples"] if row["decision"] == "greeting_scheduled"
+            )
+            admitted = next(row for row in observations["samples"] if row["decision"] == "accepted")
+            assert (scheduled["event"], scheduled["source"], scheduled["generation"]) == (
+                admitted["event"],
+                admitted["source"],
+                admitted["generation"],
+            )

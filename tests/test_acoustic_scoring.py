@@ -54,6 +54,20 @@ def test_last_energy_and_alignment_uncertainty_determine_cutoff(tmp_path):
 
 
 @pytest.mark.features("C2", "D5")
+@pytest.mark.scenario("ACOUSTIC-HASHED-PCM-SNAPSHOT")
+def test_replacement_after_hash_cannot_change_measured_pcm(tmp_path, monkeypatch):
+    trial = fixture(tmp_path)
+    original = wave.open
+
+    def replace_before_decode(source, mode):
+        (tmp_path / trial.file).write_bytes(b"replaced after input snapshot")
+        return original(source, mode)
+
+    monkeypatch.setattr("reachy_brain.evals.acoustics.wave.open", replace_before_decode)
+    assert measure_cutoff(tmp_path, trial)["cutoff_upper_ms"] == 102
+
+
+@pytest.mark.features("C2", "D5")
 @pytest.mark.scenario("ACOUSTIC-SCORER-REJECTS-INVALID-EVIDENCE")
 @pytest.mark.parametrize(
     "updates,error",

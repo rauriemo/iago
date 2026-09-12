@@ -8,10 +8,13 @@ import time
 from contextlib import asynccontextmanager
 
 import numpy as np
+from anyio import CancelScope
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import Response
 
+from .commands import dispatch
 from .media import ReachyLocalMedia
+from .protocol import VERSION, capabilities, compatible_version
 from .runtime import EdgeRuntime
 
 
@@ -60,11 +63,23 @@ def create_edge_app(token, media_factory=ReachyLocalMedia):
     @app.get("/frame")
     async def frame(request: Request, preview: bool = False):
         auth(request)
-        if state["mode"] == "idle" or not state["camera_enabled"]:
+        runtime = state["runtime"]
+        if (
+            runtime is None
+            or runtime.error
+            or state["mode"] == "idle"
+            or not state["camera_enabled"]
+        ):
             raise HTTPException(409, "Camera inactive")
         owner = state["owner"]
-        result = await asyncio.to_thread(state["runtime"].camera.snapshot, preview)
-        if owner != state["owner"] or state["mode"] == "idle" or not state["camera_enabled"]:
+        result = await asyncio.to_thread(runtime.camera.snapshot, preview)
+        if (
+            runtime.error
+            or runtime is not state["runtime"]
+            or owner != state["owner"]
+            or state["mode"] == "idle"
+            or not state["camera_enabled"]
+        ):
             raise HTTPException(409, "Camera request canceled")
         if not result:
             raise HTTPException(503, "Camera frame unavailable")
@@ -89,8 +104,13 @@ def create_edge_app(token, media_factory=ReachyLocalMedia):
         await ws.accept()
         async with asyncio.timeout(5):
             message = await ws.receive_json()
-        if not secrets.compare_digest(str(message.get("token", "")), token):
+        if not isinstance(message, dict) or not secrets.compare_digest(
+            str(message.get("token", "")), token
+        ):
             await ws.close(code=1008)
+            return None
+        if not compatible_version(message):
+            await ws.close(code=1002)
             return None
         return message
 
@@ -115,111 +135,23 @@ def create_edge_app(token, media_factory=ReachyLocalMedia):
         runtime = state["runtime"]
         supervisor = runtime.supervisor
         supervisor.connect(session, connection, now=time.monotonic())
-        await ws.send_json(
-            {
-                "type": "ready",
-                "session": session,
-                "connection": connection,
-                "stop_generation": 0,
-                "edge_time": time.time(),
-            }
-        )
         try:
+            await ws.send_json(
+                {
+                    "type": "ready",
+                    "protocol_version": VERSION,
+                    "session": session,
+                    "connection": connection,
+                    "stop_generation": 0,
+                    "edge_time": time.time(),
+                    "capabilities": capabilities(runtime.media.input_rate),
+                }
+            )
             while True:
                 m = await ws.receive_json()
-                kind = m.get("type")
-                if kind == "heartbeat":
-                    supervisor.heartbeat(session, connection, now=time.monotonic())
-                    events = []
-                    while supervisor.events:
-                        events.append(supervisor.events.popleft())
-                    while runtime.played:
-                        events.append(runtime.played.popleft())
-                    await ws.send_json(
-                        {
-                            "type": "heartbeat",
-                            "edge_time": time.time(),
-                            "echo": m.get("sent"),
-                            "events": events,
-                        }
-                    )
-                elif kind == "stop":
-                    await ws.send_json({"type": "stop", "generation": supervisor.stop()})
-                elif kind == "audio_settings":
-                    settings = runtime.configure_audio(m["muted"], m["patient"], m["volume"])
-                    await ws.send_json({"type": "audio_settings", **settings})
-                elif kind == "finish_turn":
-                    accepted = state["mode"] == "conversation" and runtime.request_finish()
-                    await ws.send_json({"type": "finish_queued", "accepted": accepted})
-                elif kind == "motion_enabled":
-                    runtime.motion.configure(m["enabled"])
-                    await ws.send_json(
-                        {"type": "motion_enabled", "enabled": runtime.motion.enabled}
-                    )
-                elif kind == "motion_cue":
-                    generation = int(m["acknowledged_stop"])
-
-                    def valid_motion(generation=generation):
-                        return (
-                            state["owner"] == (session, connection)
-                            and state["mode"] != "idle"
-                            and supervisor.guard.stop_generation == generation
-                            and time.monotonic() < supervisor.guard.deadline
-                        )
-
-                    accepted = runtime.motion.cue(m["cue"], valid_motion, now=time.monotonic())
-                    await ws.send_json({"type": "motion_cue", "accepted": accepted})
-                elif kind == "camera" and type(m.get("enabled")) is bool:
-                    enabled = m["enabled"]
-                    if state["mode"] != "idle" and enabled != state["camera_enabled"]:
-                        runtime.camera.set_enabled(False)
-                        await asyncio.to_thread(runtime.media.set_camera, enabled)
-                        runtime.camera.set_enabled(enabled)
-                    state["camera_enabled"] = enabled
-                    await ws.send_json({"type": "camera", "enabled": enabled})
-                elif kind == "mode" and m.get("mode") in {"idle", "aware", "conversation"}:
-                    supervisor.stop()
-                    state["mode"] = "idle"
-                    runtime.capture_enabled = False
-                    runtime.finish_requested = False
-                    runtime.camera.set_enabled(False)
-                    await asyncio.to_thread(runtime.media.set_mode, m["mode"])
-                    if m["mode"] != "idle" and not state["camera_enabled"]:
-                        await asyncio.to_thread(runtime.media.set_camera, False)
-                    state["mode"] = m["mode"]
-                    runtime.camera.set_enabled(m["mode"] != "idle" and state["camera_enabled"])
-                    runtime.capture_enabled = m["mode"] == "conversation"
-                    with runtime.capture_lock:
-                        runtime.capture.clear()
-                    await ws.send_json(
-                        {
-                            "type": "mode",
-                            "mode": state["mode"],
-                            "generation": supervisor.guard.stop_generation,
-                        }
-                    )
-                elif kind == "authorize":
-                    accepted = state["mode"] == "conversation" and supervisor.authorize(
-                        int(m["epoch"]),
-                        acknowledged_stop=int(m["acknowledged_stop"]),
-                        now=time.monotonic(),
-                    )
-                    await ws.send_json(
-                        {"type": "authorized", "accepted": accepted, "epoch": m["epoch"]}
-                    )
-                elif kind == "audio":
-                    pcm = base64.b64decode(m["pcm"], validate=True)
-                    accepted = state["mode"] == "conversation" and supervisor.audio(
-                        session,
-                        connection,
-                        int(m["epoch"]),
-                        int(m["sequence"]),
-                        pcm,
-                        now=time.monotonic(),
-                    )
-                    await ws.send_json(
-                        {"type": "queued", "accepted": accepted, "sequence": m["sequence"]}
-                    )
+                result = await dispatch(state, session, connection, m)
+                if result is not None:
+                    await ws.send_json(result)
         except (WebSocketDisconnect, RuntimeError, ValueError, KeyError):
             pass
         finally:
@@ -228,12 +160,24 @@ def create_edge_app(token, media_factory=ReachyLocalMedia):
             runtime.finish_requested = False
             runtime.camera.set_enabled(False)
             state["mode"] = "idle"
+            release = asyncio.create_task(asyncio.to_thread(runtime.media.set_mode, "idle"))
+            canceled = False
             try:
-                await asyncio.to_thread(runtime.media.set_mode, "idle")
-            finally:
-                # A replacement controller cannot acquire media while the old
-                # controller's asynchronous release is still in flight.
-                state["owner"] = None
+                with CancelScope(shield=True):
+                    while not release.done():
+                        try:
+                            await asyncio.shield(release)
+                        except asyncio.CancelledError:
+                            canceled = True
+                    release.result()
+            except Exception as exc:
+                runtime.error = "media_release_failed:" + type(exc).__name__
+                raise
+            # Native media work cannot be canceled with its asynchronous waiter.
+            # Transfer ownership only after observing successful completion.
+            state["owner"] = None
+            if canceled:
+                raise asyncio.CancelledError
 
     @app.websocket("/microphone")
     async def microphone(ws: WebSocket):
@@ -250,7 +194,7 @@ def create_edge_app(token, media_factory=ReachyLocalMedia):
         state["microphone"] = ws
         runtime = state["runtime"]
         try:
-            while state["owner"] == owner:
+            while state["owner"] == owner and not runtime.error:
                 with runtime.capture_lock:
                     packet = runtime.capture.popleft() if runtime.capture else None
                 if packet:

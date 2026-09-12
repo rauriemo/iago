@@ -88,6 +88,21 @@ class Transcripts:
                 "generated_text": {"type": "string", "maxLength": 12000},
                 "interrupted": {"type": "boolean"},
                 "generated_truncated": {"type": "boolean"},
+                "model_responses_truncated": {"type": "boolean"},
+                "model_responses": {
+                    "type": "array",
+                    "maxItems": 32,
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "response_id": identifier,
+                            "requested_model": identifier,
+                            "reported_model": identifier,
+                        },
+                        "required": ["response_id", "requested_model"],
+                    },
+                },
                 "trigger_rule_id": identifier,
                 "trigger_event_id": identifier,
                 "trigger_source_id": identifier,
@@ -105,6 +120,32 @@ class Transcripts:
                                     "id": identifier,
                                     "source_id": identifier,
                                     "source_generation": {"type": "integer", "minimum": 0},
+                                    "source_frame_id": identifier,
+                                    "captured": {"type": "number", "minimum": 0},
+                                    "image_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                                    "capture_time_known": {"type": "boolean"},
+                                    "capture_uncertainty_seconds": {
+                                        "type": ["number", "null"],
+                                        "minimum": 0,
+                                    },
+                                    "capture_interval": {
+                                        "type": ["array", "null"],
+                                        "minItems": 2,
+                                        "maxItems": 2,
+                                        "items": {"type": "number"},
+                                    },
+                                    "source_kind": {"enum": ["camera", "screen", "upload"]},
+                                    "region": {
+                                        "type": "array",
+                                        "minItems": 4,
+                                        "maxItems": 4,
+                                        "prefixItems": [
+                                            {"type": "integer", "minimum": 0, "maximum": 8192},
+                                            {"type": "integer", "minimum": 0, "maximum": 8192},
+                                            {"type": "integer", "minimum": 1, "maximum": 8192},
+                                            {"type": "integer", "minimum": 1, "maximum": 8192},
+                                        ],
+                                    },
                                 },
                                 "required": ["kind", "id", "source_id", "source_generation"],
                             },
@@ -145,6 +186,7 @@ class Transcripts:
                 "recognition_id": identifier,
                 "capture_start": {"type": "number", "minimum": 0},
                 "capture_end": {"type": "number", "minimum": 0},
+                "capture_clock_uncertainty": {"type": "number", "minimum": 0, "maximum": 10},
             },
         }
         if not Draft202012Validator(schema).is_valid(metadata):

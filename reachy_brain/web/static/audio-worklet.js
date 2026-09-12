@@ -12,16 +12,30 @@ class IagoAudio extends AudioWorkletProcessor {
       if(m.type==='stop') this.stop(true);
       if(m.type==='remote_stop') {this.queue=[];this.buffered=0;this.latched=true;}
       if(m.type==='authorize'&&m.acknowledged_stop===this.stopGeneration&&m.epoch>this.epoch){
+        this.queue=[];this.buffered=0;
         this.epoch=m.epoch;this.sequence=-1;this.latched=false;this.outputPhase=0;
       }
-      if(m.type==='settings'){if(m.recording!==this.recording||m.muted!==this.muted){this.input=[];this.inputPhase=0;this.speechStarted=null;this.speaking=this.hasSpeech=false;this.high=this.low=0;}Object.assign(this,m);}
-      if(m.type==='segment_end'&&m.epoch===this.epoch&&!this.latched)this.queue.push({end:m.segment});
+      if(m.type==='settings'){
+        for(const key of ['recording','muted','patient'])if(key in m&&typeof m[key]!=='boolean')return;
+        if('volume' in m&&(!Number.isFinite(m.volume)||m.volume<0||m.volume>1))return;
+        const recording=m.recording??this.recording,muted=m.muted??this.muted;
+        if(recording!==this.recording||muted!==this.muted){this.input=[];this.inputPhase=0;this.speechStarted=null;this.speaking=this.hasSpeech=false;this.high=this.low=0;}
+        this.recording=recording;this.muted=muted;
+        if('patient' in m)this.patient=m.patient;
+        if('volume' in m)this.volume=m.volume;
+      }
+      if(m.type==='segment_end'&&m.epoch===this.epoch&&!this.latched){
+        if(typeof m.segment!=='string'||!m.segment.length||m.segment.length>128){this.stop(true);this.port.postMessage({type:'invalid_audio'});return;}
+        if(this.queue.length>=1024){this.stop(true);this.port.postMessage({type:'overflow'});return;}
+        this.queue.push({end:m.segment});
+      }
       if(m.type==='audio'&&!this.latched&&m.epoch===this.epoch&&m.sequence>this.sequence){
+        if(!(m.pcm instanceof Int16Array)||!m.pcm.length){this.stop(true);this.port.postMessage({type:'invalid_audio'});return;}
         const pcm=m.pcm;const ratio=24000/sampleRate;const count=Math.max(0,Math.ceil((pcm.length-this.outputPhase)/ratio));
+        if(this.queue.length>=1024||this.buffered+count>sampleRate*10){this.stop(true);this.port.postMessage({type:'overflow'});return;}
         const out=new Float32Array(count);
         for(let i=0;i<count;i++){const p=this.outputPhase+i*ratio,j=Math.floor(p);out[i]=pcm[Math.min(j,pcm.length-1)]/32768;}
         this.outputPhase+=count*ratio-pcm.length;
-        if(this.buffered+count>sampleRate*10){this.stop(true);this.port.postMessage({type:'overflow'});return;}
         this.sequence=m.sequence;this.queue.push({samples:out,index:0,sequence:m.sequence});this.buffered+=count;
       }
     };

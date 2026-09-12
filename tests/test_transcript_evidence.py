@@ -28,6 +28,25 @@ from reachy_brain.vision.store import VisualStore
 
 
 @pytest.mark.features("C9")
+@pytest.mark.scenario("MODEL-PROVENANCE-BOUNDS-EPOCH")
+def test_model_provenance_bounds_epoch_and_no_extra_content():
+    core = SimpleNamespace(answer_record_epoch=2, answer_metadata={})
+    row = {"response_id": "r", "requested_model": "gpt-6-astra", "secret": "private"}
+    Conversation.record_model_response(core, 1, row)
+    assert core.answer_metadata == {}
+    Conversation.record_model_response(core, 2, row)
+    Conversation.record_model_response(core, 2, {**row, "reported_model": "reported"})
+    assert core.answer_metadata["model_responses"] == [
+        {"response_id": "r", "requested_model": "gpt-6-astra", "reported_model": "reported"}
+    ]
+    for i in range(40):
+        Conversation.record_model_response(core, 2, {**row, "response_id": str(i)})
+    assert len(core.answer_metadata["model_responses"]) == 32
+    assert core.answer_metadata["model_responses_truncated"] is True
+    assert "private" not in json.dumps(core.answer_metadata)
+
+
+@pytest.mark.features("C9")
 @pytest.mark.scenario("TRANSCRIPT-EVIDENCE-BOUNDS-EPOCH")
 def test_reference_bounds_and_stale_epoch():
     core = SimpleNamespace(answer_record_epoch=2, answer_metadata={})
@@ -66,6 +85,10 @@ async def test_trigger_and_evidence_keep_only_bounded_references(tmp_path):
             if self.calls == 1:
                 yield {
                     "type": "item",
+                    "provenance": {
+                        "response_id": "tool-response",
+                        "requested_model": "gpt-6-astra",
+                    },
                     "item": {
                         "type": "function_call",
                         "call_id": "lookup",
@@ -74,7 +97,15 @@ async def test_trigger_and_evidence_keep_only_bounded_references(tmp_path):
                     },
                 }
             else:
-                yield {"type": "text", "text": "Synthetic answer."}
+                yield {
+                    "type": "text",
+                    "text": "Synthetic answer.",
+                    "provenance": {
+                        "response_id": "answer-response",
+                        "requested_model": "gpt-6-astra",
+                        "reported_model": "provider-reported-synthetic",
+                    },
+                }
 
     class Voice:
         async def stream(self, text):
@@ -142,10 +173,29 @@ async def test_trigger_and_evidence_keep_only_bounded_references(tmp_path):
         await recorder.queue.join()
         row = (await asyncio.to_thread(store.entries, core.session))[0]
         metadata = row["metadata"]
+        assert metadata["model_responses"] == [
+            {"response_id": "tool-response", "requested_model": "gpt-6-astra"},
+            {
+                "response_id": "answer-response",
+                "requested_model": "gpt-6-astra",
+                "reported_model": "provider-reported-synthetic",
+            },
+        ]
         assert metadata["trigger_rule_id"] == "test-rule"
         assert metadata["trigger_event_id"] == "test-event"
         assert metadata["evidence_refs"] == [
-            {"kind": "visual", "id": frame.id, "source_id": source.id, "source_generation": 0},
+            {
+                "kind": "visual",
+                "id": frame.id,
+                "source_id": source.id,
+                "source_generation": 0,
+                "captured": frame.captured,
+                "image_sha256": frame.image_sha256,
+                "capture_time_known": True,
+                "capture_uncertainty_seconds": None,
+                "capture_interval": None,
+                "source_kind": "camera",
+            },
             {"kind": "document", "id": "passage", "project_id": "project", "revision": "revision"},
         ]
         assert passage["text"] not in json.dumps(metadata)
@@ -155,6 +205,66 @@ async def test_trigger_and_evidence_keep_only_bounded_references(tmp_path):
         assert (await asyncio.to_thread(store.entries, core.session))[0]["metadata"] == metadata
     finally:
         await recorder.close()
+
+
+@pytest.mark.features("C9", "V4", "V9")
+@pytest.mark.scenario("TRANSCRIPT-VISUAL-CROP-PROVENANCE")
+def test_saved_visual_overview_and_distinct_crops_preserve_provenance(tmp_path):
+    core = SimpleNamespace(answer_record_epoch=1, answer_metadata={})
+    base = {
+        "id": "frame",
+        "source": "screen",
+        "generation": 2,
+        "captured": 123.5,
+        "capture_time_known": False,
+        "source_kind": "screen",
+    }
+    rows = [base, {**base, "region": [1, 2, 30, 40]}, {**base, "region": [50, 2, 30, 40]}]
+    Conversation.record_evidence(core, 1, rows + rows)
+    refs = core.answer_metadata["evidence_refs"]
+    assert len(refs) == 3
+    assert "region" not in refs[0]
+    assert refs[1]["region"] == [1, 2, 30, 40]
+    assert refs[2]["region"] == [50, 2, 30, 40]
+    assert all(r["captured"] == 123.5 and r["capture_time_known"] is False for r in refs)
+    store = Transcripts(tmp_path / "crops.sqlite")
+    state = store.set_enabled(True)
+    # Use the store's generation rather than assuming a recording configuration epoch.
+    store.record(
+        "session",
+        "answer",
+        "assistant",
+        "Synthetic answer",
+        "heard",
+        generation=state["generation"],
+        metadata=core.answer_metadata,
+    )
+    assert store.entries("session")[0]["metadata"]["evidence_refs"] == refs
+
+
+@pytest.mark.parametrize(
+    "region", [[True, 0, 1, 1], [0, 0, 0, 1], [8192, 0, 1, 1], "private", [1, 2, 3]]
+)
+def test_invalid_visual_provenance_fields_are_not_persisted(region):
+    core = SimpleNamespace(answer_record_epoch=1, answer_metadata={})
+    Conversation.record_evidence(
+        core,
+        1,
+        [
+            {
+                "id": "f",
+                "source": "s",
+                "generation": 0,
+                "region": region,
+                "captured": float("nan"),
+                "capture_time_known": "yes",
+                "source_kind": "private",
+            }
+        ],
+    )
+    assert core.answer_metadata["evidence_refs"] == [
+        {"kind": "visual", "id": "f", "source_id": "s", "source_generation": 0}
+    ]
 
 
 @pytest.mark.features("C9", "P10", "V3")
@@ -227,3 +337,61 @@ async def test_saved_gesture_retains_bounded_provenance_not_images(tmp_path):
         assert store.entries(core.session)[0] == row
     finally:
         await recorder.close()
+
+
+@pytest.mark.features("C9", "V5", "V6")
+@pytest.mark.scenario("TRANSCRIPT-VISUAL-TIMING-BOUND")
+@pytest.mark.parametrize("bound,known", [(0.25, True), (0, True), (None, True), (0.25, False)])
+def test_saved_evidence_retains_timing_bound_and_derives_interval(tmp_path, bound, known):
+    core = SimpleNamespace(answer_record_epoch=1, answer_metadata={})
+    row = {
+        "id": "f",
+        "source": "camera",
+        "generation": 0,
+        "captured": 100,
+        "capture_time_known": known,
+        "capture_uncertainty_seconds": bound,
+        "capture_interval": [1, 2],
+    }
+    Conversation.record_evidence(core, 1, [row])
+    ref = core.answer_metadata["evidence_refs"][0]
+    assert ref["capture_uncertainty_seconds"] == bound
+    assert ref["capture_interval"] == (
+        [100 - bound, 100 + bound] if known and bound is not None else None
+    )
+    store = Transcripts(tmp_path / "timing.sqlite")
+    state = store.set_enabled(True)
+    store.record(
+        "session",
+        "answer",
+        "assistant",
+        "Synthetic",
+        "heard",
+        generation=state["generation"],
+        metadata=core.answer_metadata,
+    )
+    assert store.entries("session")[0]["metadata"]["evidence_refs"] == [ref]
+
+
+@pytest.mark.features("C9", "V5")
+@pytest.mark.scenario("TRANSCRIPT-VISUAL-INVALID-TIMING-BOUND")
+@pytest.mark.parametrize("bound", [-1, True, "private", float("inf"), float("nan")])
+def test_invalid_timing_bound_is_explicitly_unknown(bound):
+    core = SimpleNamespace(answer_record_epoch=1, answer_metadata={})
+    Conversation.record_evidence(
+        core,
+        1,
+        [
+            {
+                "id": "f",
+                "source": "camera",
+                "generation": 0,
+                "captured": 100,
+                "capture_time_known": True,
+                "capture_uncertainty_seconds": bound,
+            }
+        ],
+    )
+    ref = core.answer_metadata["evidence_refs"][0]
+    assert ref["capture_uncertainty_seconds"] is None and ref["capture_interval"] is None
+    assert "private" not in json.dumps(ref)

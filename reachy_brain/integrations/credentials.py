@@ -64,6 +64,10 @@ class LocalCredentials:
         if account not in self.config or account in self.disconnected:
             raise ToolError("account_disconnected")
         async with self.locks.setdefault(account, asyncio.Lock()):
+            # Disconnection can occur while another retrieval owns this lock.
+            # Reject queued work before starting any new provider refresh.
+            if account not in self.config or account in self.disconnected:
+                raise ToolError("account_disconnected")
             generation = self.generations.get(account, 0)
             cfg = self.config[account]
             if not scopes <= set(cfg.get("scopes", [])):
@@ -78,8 +82,16 @@ class LocalCredentials:
                     if not token:
                         raise ToolError("missing_credential")
                     value = Credential(SecretStr(token), frozenset(cfg["scopes"]), float("inf"))
-                if account in self.disconnected or generation != self.generations.get(account, 0):
+                if (
+                    account not in self.config
+                    or account in self.disconnected
+                    or generation != self.generations.get(account, 0)
+                ):
                     raise ToolError("account_disconnected")
+                # Refresh yields to account configuration changes. The original
+                # cfg and the provider's token scopes cannot preserve a revoked grant.
+                if not scopes <= set(self.config[account].get("scopes", [])):
+                    raise ToolError("missing_scope")
                 if not value.token.get_secret_value() or value.expires <= self.clock():
                     raise ToolError("credential_expired")
                 self.cache[account] = value
@@ -95,6 +107,16 @@ class LocalCredentials:
             try:
                 async with asyncio.timeout(10):
                     return await self.revoke(account)
-            except (TimeoutError, OSError):
+            except Exception:
+                # Provider-specific failures must not expose response bodies or
+                # credentials. Cancellation still propagates as BaseException.
                 return False
         return True
+
+    async def disconnect_status(self, account):
+        revoked = await self.disconnect(account)
+        if self.revoke is None:
+            outcome = "not_configured"
+        else:
+            outcome = "confirmed" if revoked is True else "failed"
+        return "local_credentials_cleared_remote_revocation_" + outcome

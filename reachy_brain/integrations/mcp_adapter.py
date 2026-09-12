@@ -104,8 +104,7 @@ class MCPModule:
 
     async def disconnect(self):
         if self.credentials:
-            await self.credentials.disconnect(self.config["account"])
-            return "local_credentials_cleared_remote_revocation_not_configured"
+            return await self.credentials.disconnect_status(self.config["account"])
         return "no_credential_provider"
 
     async def register(self, registry, policy, *, defer_identity=False):

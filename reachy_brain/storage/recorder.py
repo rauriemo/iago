@@ -1,6 +1,7 @@
 """Bounded nonblocking submission; a single worker serializes private transcript writes."""
 
 import asyncio
+import copy
 
 import anyio
 
@@ -92,7 +93,9 @@ class TranscriptRecorder:
             self.error = "transcript_correction_capacity"
             return False
         try:
-            self.queue.put_nowait((generation, session, entry, role, text, kind, metadata, remove))
+            self.queue.put_nowait(
+                (generation, session, entry, role, text, kind, copy.deepcopy(metadata), remove)
+            )
             if kind == "gesture":
                 self.gestures[key] = "live"
             return True

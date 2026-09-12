@@ -17,6 +17,59 @@ from reachy_brain.web.app import create_app
 
 
 @pytest.mark.features("D6")
+@pytest.mark.scenario("USAGE-UNFINISHED-ATTEMPT-RECOVERY")
+@pytest.mark.parametrize("completed", [False, True])
+async def test_checkpointed_attempt_recovers_uncertainty_once_without_content(tmp_path, completed):
+    settings = Settings(_env_file=None, iago_development_budget="unlimited")
+    path = tmp_path / "usage.json"
+    gate = ProviderGate(settings)
+    storage = UsageStorage(gate, path)
+    await storage.start()
+    identity = gate.begin_active("astra", "gpt-6-astra", {"private": "do-not-persist"})
+    if completed:
+        gate.end_active(identity)
+        gate.record("astra", "finished", {}, model="gpt-6-astra")
+    # Preserve the checkpoint with an unfinished attempt; no process-kill claim.
+    await storage.close()
+    assert "do-not-persist" not in path.read_text(encoding="utf-8")
+    for _ in range(2):
+        recovered = ProviderGate(settings)
+        reopened = UsageStorage(recovered, path)
+        await reopened.start()
+        assert recovered.unknown_charges == 1
+        assert recovered.estimated_usd == 0
+        assert not recovered.active
+        await reopened.close()
+    assert json.loads(path.read_text(encoding="utf-8"))["active_attempts"] == []
+
+
+@pytest.mark.features("D6")
+@pytest.mark.scenario("PROVIDER-PLAN-LIMIT-RESTART")
+@pytest.mark.parametrize("provider", ["openai", "elevenlabs"])
+async def test_provider_limit_survives_restart_without_usage_record(tmp_path, provider):
+    settings = Settings(_env_file=None, iago_development_budget="unlimited")
+    path = tmp_path / "usage.json"
+    gate = ProviderGate(settings)
+    storage = UsageStorage(gate, path)
+    await storage.start()
+    gate.limit(provider)
+    with pytest.raises(ProviderError, match="plan_limit"):
+        gate.require(provider)
+    await storage.close()
+    replacement = ProviderGate(settings)
+    reopened = UsageStorage(replacement, path)
+    await reopened.start()
+    try:
+        with pytest.raises(ProviderError, match="plan_limit"):
+            replacement.require(provider)
+        replacement.require("elevenlabs" if provider == "openai" else "openai")
+        assert replacement.usage == [] and replacement.unknown_charges == 0
+        assert replacement.limited == {provider}
+    finally:
+        await reopened.close()
+
+
+@pytest.mark.features("D6")
 @pytest.mark.scenario("USAGE-CHECKPOINT-RESTART")
 async def test_restart_preserves_cost_dedupe_and_numeric_admission(tmp_path):
     settings = Settings(_env_file=None, iago_development_budget=0.001)
@@ -128,7 +181,7 @@ async def test_invalid_checkpoint_is_not_silently_reset(tmp_path):
 @pytest.mark.features("D6")
 @pytest.mark.scenario("USAGE-APPLICATION-RESTART")
 async def test_application_lifecycle_restores_public_totals(tmp_path, monkeypatch):
-    settings = Settings(_env_file=None, data_dir=tmp_path)
+    settings = Settings(_env_file=None, data_dir=tmp_path, iago_development_budget="unlimited")
     gates = []
 
     def make_gate(value):
@@ -139,6 +192,7 @@ async def test_application_lifecycle_restores_public_totals(tmp_path, monkeypatc
     app = create_app(settings, token="synthetic")
     async with app.router.lifespan_context(app):
         gates[-1].record("astra", "synthetic-response", {})
+        gates[-1].limit("openai")
     app = create_app(settings, token="synthetic")
     async with app.router.lifespan_context(app):
         active_id = gates[-1].begin_active(
@@ -152,8 +206,15 @@ async def test_application_lifecycle_restores_public_totals(tmp_path, monkeypatc
                 "/api/status", headers={"Authorization": "Bearer synthetic"}
             )
         assert response.status_code == 200
+        assert response.json()["provider_limits"] == ["openai"]
+        with pytest.raises(ProviderError, match="plan_limit"):
+            gates[-1].require("openai")
+        gates[-1].require("elevenlabs")
         assert response.json()["costs"]["unknown_charges"] == 1
-        assert response.json()["costs"]["persistence"]["status"] == "saved"
+        persistence = response.json()["costs"]["persistence"]
+        assert persistence["status"] == (
+            "saved" if persistence["revision"] == persistence["persisted_revision"] else "pending"
+        )
         assert response.json()["usage"] == []
         active = response.json()["costs"]["active_attempts"]
         assert len(active) == 1 and active[0]["attempt_id"] == active_id

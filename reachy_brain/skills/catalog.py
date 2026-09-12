@@ -13,15 +13,21 @@ class SkillCatalog:
         self.installed = installed
         self.entries = {}
 
+    @staticmethod
+    def validate_installation(installation):
+        if any(type(installation.get(key, False)) is not bool for key in ("trusted", "enabled")):
+            raise ToolError("invalid_skill_installation")
+        if installation.get("trusted"):
+            location = installation.get("path")
+            if not isinstance(location, str) or not location.strip():
+                raise ToolError("invalid_skill_installation")
+
     def discover(self, enabled_tools: set[str], capabilities: set[str], *, include_disabled=False):
         self.entries = {}
         entries = {}
         result = []
         for installation in self.installed[:50]:
-            if any(
-                type(installation.get(key, False)) is not bool for key in ("trusted", "enabled")
-            ):
-                raise ToolError("invalid_skill_installation")
+            self.validate_installation(installation)
             if not installation.get("trusted") or (
                 not installation.get("enabled") and not include_disabled
             ):
@@ -29,7 +35,10 @@ class SkillCatalog:
             location = installation.get("path")
             if not isinstance(location, str) or not location.strip():
                 raise ToolError("invalid_skill_installation")
-            root = Path(location).resolve(strict=True)
+            try:
+                root = Path(location).resolve(strict=True)
+            except (OSError, ValueError, RuntimeError):
+                raise ToolError("invalid_skill_installation") from None
             manifest = self._read(root, "workflow.json", 8192)
             try:
                 metadata = WorkflowManifest.model_validate_json(manifest).model_dump()
@@ -56,11 +65,14 @@ class SkillCatalog:
 
     @staticmethod
     def _read(root, relative, maximum):
-        path = (root / relative).resolve(strict=True)
-        if not path.is_relative_to(root):
-            raise ToolError("invalid_skill_resource")
-        with path.open("rb") as source:
-            data = source.read(maximum + 1)
+        try:
+            path = (root / relative).resolve(strict=True)
+            if not path.is_relative_to(root):
+                raise ToolError("invalid_skill_resource")
+            with path.open("rb") as source:
+                data = source.read(maximum + 1)
+        except (OSError, ValueError, RuntimeError):
+            raise ToolError("invalid_skill_resource") from None
         if len(data) > maximum:
             raise ToolError("invalid_skill_resource")
         try:

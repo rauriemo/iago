@@ -21,7 +21,9 @@ RUNTIME_INSTRUCTIONS = (
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore", case_sensitive=False)
+    model_config = SettingsConfigDict(
+        env_file=".env", extra="ignore", case_sensitive=False, allow_inf_nan=False
+    )
     brain_provider: Literal["openai"] = "openai"
     brain_model: Literal["gpt-6-astra"] = "gpt-6-astra"
     brain_reasoning_effort: Literal["low", "medium", "high", "xhigh", "max"] = "low"
@@ -46,6 +48,9 @@ class Settings(BaseSettings):
     iago_edge_url: str = "http://127.0.0.1:8877"
     iago_edge_token: SecretStr = SecretStr("")
     iago_edge_ca_file: str | None = None
+    robot_camera_transport: Literal["edge", "webrtc"] = "edge"
+    robot_camera_hf_token: SecretStr = SecretStr("")
+    robot_camera_peer_id: str = Field(default="", max_length=200)
     robot_output_latency_allowance: float = Field(default=0.5, ge=0.1, le=3)
     robot_camera_timing_uncertainty: float | None = Field(default=None, ge=0, le=1)
     # Zero disables billable work until configured; unlimited still honors provider limits.
@@ -53,6 +58,8 @@ class Settings(BaseSettings):
     cost_rate_table: Path | None = None
     workflow_max_rounds: int = Field(default=8, ge=4, le=16)
     workflow_deadline_seconds: float = Field(default=60, ge=10, le=120)
+    retrieval_deadline_seconds: float = Field(default=10, ge=1, le=30)
+    model_image_max_mib: int = Field(default=16, ge=1, le=64)
     history_retention_seconds: float = Field(default=600, gt=0)
     history_max_mib: int = Field(default=512, ge=1)
     pin_max_images: int = Field(default=10, ge=1)
@@ -64,7 +71,13 @@ class Settings(BaseSettings):
 
     def public(self) -> dict:
         values = self.model_dump(
-            mode="json", exclude={"openai_api_key", "elevenlabs_api_key", "iago_edge_token"}
+            mode="json",
+            exclude={
+                "openai_api_key",
+                "elevenlabs_api_key",
+                "iago_edge_token",
+                "robot_camera_hf_token",
+            },
         )
         values["openai_configured"] = bool(self.openai_api_key.get_secret_value())
         values["elevenlabs_configured"] = bool(self.elevenlabs_api_key.get_secret_value())

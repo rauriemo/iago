@@ -4,19 +4,19 @@ import pytest
 
 from reachy_brain.config import Settings
 from reachy_brain.core.conversation import Conversation
-from reachy_brain.providers.live import AstraBrain, ProviderGate
+from reachy_brain.providers.live import AstraBrain
 
 
 @pytest.mark.live_provider
 @pytest.mark.features("C4", "C8")
 @pytest.mark.scenario("ASTRA-CANONICAL-SUMMARY")
-async def test_canonical_summary_retains_synthetic_decision_and_uncertainty(record_property):
+async def test_canonical_summary_retains_synthetic_decision_and_uncertainty(record_property, live_gate):
     settings = Settings()
     if not settings.openai_api_key.get_secret_value():
         pytest.skip("OPENAI_API_KEY missing in private setup")
     if settings.iago_development_budget == 0:
         pytest.skip("Live development budget is zero")
-    gate = ProviderGate(settings)
+    gate = live_gate
     brain = AstraBrain(settings, gate)
 
     async def send(event):

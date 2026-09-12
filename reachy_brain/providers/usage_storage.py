@@ -15,6 +15,10 @@ class Checkpoint(BaseModel):
     revision: int = Field(default=0, ge=0)
     estimated_usd: float = Field(default=0, ge=0)
     unknown_charges: int = Field(default=0, ge=0)
+    limited: list[Literal["openai", "elevenlabs"]] = Field(default_factory=list, max_length=2)
+    active_attempts: list[Annotated[str, StringConstraints(min_length=1, max_length=128)]] = Field(
+        default_factory=list, max_length=32
+    )
     identities: list[
         tuple[
             Annotated[str, StringConstraints(min_length=1, max_length=64)],
@@ -32,6 +36,7 @@ class UsageStorage:
         self.error = None
         self.closing = False
         self.wake = asyncio.Event()
+        self.progress = asyncio.Event()
         self.worker = None
         self.starting = False
         self.lock_file = None
@@ -84,6 +89,8 @@ class UsageStorage:
         value = Checkpoint.model_validate_json(raw)
         if len(set(value.identities)) != len(value.identities):
             raise ValueError("usage_storage_duplicate_identity")
+        if len(set(value.active_attempts)) != len(value.active_attempts):
+            raise ValueError("usage_storage_duplicate_active_attempt")
         return value
 
     async def start(self):
@@ -111,10 +118,13 @@ class UsageStorage:
             await self.close()
             raise RuntimeError("usage_storage_closed")
         self.gate.estimated_usd = saved.estimated_usd
-        self.gate.unknown_charges = saved.unknown_charges
+        self.gate.unknown_charges = saved.unknown_charges + len(saved.active_attempts)
         self.gate.seen_usage = set(saved.identities)
+        self.gate.limited.update(saved.limited)
         self.revision = self.persisted = saved.revision
         self.gate.persistence = self
+        if self.gate.limited != set(saved.limited) or saved.active_attempts:
+            self.changed()
         self.worker = asyncio.create_task(self.run())
 
     def changed(self):
@@ -122,6 +132,15 @@ class UsageStorage:
         if self.closing:
             self.error = "usage_after_shutdown"
         self.wake.set()
+
+    async def flush(self):
+        target = self.revision
+        while self.persisted < target:
+            self.progress.clear()
+            if self.error or self.closing or self.worker is None or self.worker.done():
+                raise RuntimeError("usage_persistence_unavailable")
+            self.wake.set()
+            await self.progress.wait()
 
     def status(self):
         return {
@@ -158,6 +177,8 @@ class UsageStorage:
                         revision=self.revision,
                         estimated_usd=self.gate.estimated_usd,
                         unknown_charges=self.gate.unknown_charges,
+                        limited=sorted(self.gate.limited),
+                        active_attempts=sorted(self.gate.active),
                         identities=list(self.gate.seen_usage),
                     )
                     await asyncio.to_thread(self.write, snapshot)
@@ -165,6 +186,8 @@ class UsageStorage:
                 except Exception:
                     self.error = "usage_persistence_failed"
                     return
+                finally:
+                    self.progress.set()
             if self.closing and self.revision == self.persisted:
                 return
 

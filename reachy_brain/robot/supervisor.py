@@ -25,11 +25,23 @@ class EdgeSupervisor:
             self.events.clear()
 
     def stop(self):
+        failures = []
         with self.lock:
             generation = self.guard.stop()
-            self.sink.flush()
-            self.events.append({"type": "stop", "generation": generation})
-        self.sink.hold()
+            try:
+                self.sink.flush()
+                self.events.append({"type": "stop", "generation": generation})
+            except Exception as exc:
+                failures.append(exc)
+        # Device flush failure must not prevent the independent motion stop.
+        try:
+            self.sink.hold()
+        except Exception as exc:
+            failures.append(exc)
+        if len(failures) == 1:
+            raise failures[0]
+        if failures:
+            raise ExceptionGroup("robot_local_stop_failed", failures)
         return generation
 
     def heartbeat(self, session, connection, *, now):
@@ -45,7 +57,15 @@ class EdgeSupervisor:
         with self.lock:
             if self.speaking:
                 return False
-            return self.guard.authorize(epoch, acknowledged_stop=acknowledged_stop, now=now)
+            if not self.guard.authorize(epoch, acknowledged_stop=acknowledged_stop, now=now):
+                return False
+            try:
+                # Invalidate queued and already submitted audio before the new turn.
+                self.sink.flush()
+            except Exception:
+                self.guard.stop()
+                raise
+            return True
 
     def audio(self, session, connection, epoch, sequence, pcm, *, now):
         if not 0 < len(pcm) <= 1920 or len(pcm) % 2:

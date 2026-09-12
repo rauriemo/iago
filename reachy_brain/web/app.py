@@ -8,10 +8,11 @@ import time
 import uuid
 from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import asdict, replace
+from functools import partial
 from pathlib import Path
 
 from anyio import BrokenResourceError, CancelScope, ClosedResourceError
-from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
@@ -21,7 +22,9 @@ from reachy_brain.behavior.settings import BehaviorConfiguration
 from reachy_brain.behavior.window import TriggerWindow
 from reachy_brain.config import DEFAULT_PERSONALITY, Settings
 from reachy_brain.core.conversation import Conversation
+from reachy_brain.core.timing import StageTimings
 from reachy_brain.integrations.builtins import register_builtins, schema
+from reachy_brain.integrations.events import IntegrationEventSource
 from reachy_brain.integrations.operations import OperationStore
 from reachy_brain.integrations.preferences import ToolPreferences
 from reachy_brain.integrations.registry import (
@@ -53,8 +56,43 @@ from reachy_brain.storage.transcripts import Transcripts
 from reachy_brain.storage.voice import VoiceSelection
 from reachy_brain.vision.events import PerceptionEvents
 from reachy_brain.vision.evidence import EventEvidence
+from reachy_brain.vision.ingress import FrameIngress
 from reachy_brain.vision.store import VisualStore
 from reachy_brain.vision.worker import PerceptionWorker
+
+
+def transcript_export_response(transcripts, session, format):
+    rows = transcripts.entries(session, include_session=True)
+    if not rows:
+        raise HTTPException(404, "No saved transcript for this session")
+    if format == "json":
+        return Response(
+            json.dumps(
+                {"format_version": 1, "session": session, "entries": rows},
+                ensure_ascii=False,
+                allow_nan=False,
+            ),
+            media_type="application/json",
+            headers={
+                "Content-Disposition": f'attachment; filename="iago-transcript-{session}.json"',
+                "Cache-Control": "no-store",
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
+    data = "\n\n".join(
+        f"{row['role']} ({row['kind']}):\n{row['text']}"
+        + ("\nMetadata: " + json.dumps(row["metadata"], sort_keys=True) if row["metadata"] else "")
+        for row in rows
+    )
+    return Response(
+        data,
+        media_type="text/plain; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="iago-transcript-{session}.txt"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 def create_app(settings=None, token=None):
@@ -64,6 +102,7 @@ def create_app(settings=None, token=None):
     personality = PersonalityStore(settings.data_dir / "personality.json")
     settings.personality = personality.load(settings.personality)
     personality_lock = asyncio.Lock()
+    transcript_exports = asyncio.Semaphore(2)
     voice_selection = VoiceSelection(settings.data_dir / "voice-selection.json")
     settings.tts_provider = voice_selection.load(settings.tts_provider)
     voice_selection_lock = asyncio.Lock()
@@ -78,6 +117,16 @@ def create_app(settings=None, token=None):
         pin_count=settings.pin_max_images,
     )
     registry, policy = ToolRegistry(), ActionPolicy()
+    frame_ingress = FrameIngress()
+    detector_ingress = FrameIngress()
+    capture_timings = StageTimings(
+        {"camera_archive", "screen_archive", "upload_archive", "unknown_archive"},
+        "Backend authenticated frame-handler entry through upload/decode/archive completion or failure; excludes browser capture/encoding, pre-handler network transfer and physical camera exposure.",
+    )
+    perception_timings = StageTimings(
+        {"process_frame"},
+        "Detector worker execution of received result frames, excluding input/output queue waits, dropped frames, gesture accumulation and accepted-turn commit. Stale-source results may have completed processing but do not imply accepted evidence.",
+    )
     projects = ProjectIndex(settings.data_dir / "projects.sqlite")
     notes = Notes(settings.data_dir / "notes.sqlite")
     transcripts = Transcripts(settings.data_dir / "transcripts.sqlite")
@@ -95,7 +144,25 @@ def create_app(settings=None, token=None):
     perception_events = PerceptionEvents()
     event_evidence = EventEvidence(visual)
     behaviors = BehaviorEngine()
-    trigger_window = TriggerWindow()
+    integration_events = IntegrationEventSource(registry, behaviors)
+
+    def valid_behavior_source(event, now):
+        if event.source.startswith("integration:"):
+            return integration_events.valid(event, now)
+        source = visual.sources.get(event.source)
+        return bool(
+            source
+            and source.kind == "camera"
+            and source.enabled
+            and source.generation == event.generation
+        )
+
+    behaviors.event_validator = valid_behavior_source
+    trigger_window = TriggerWindow(
+        observe=lambda intent, decision: behaviors._record(
+            Event(**intent["evidence"]), decision, time.time()
+        )
+    )
     behavior_config = None
 
     async def poll_perception():
@@ -112,6 +179,7 @@ def create_app(settings=None, token=None):
                 if "error" in result:
                     perception["error"] = result["error"]
                 else:
+                    perception_timings.record("process_frame", result.get("seconds"))
                     support_jpeg = result.pop("support_jpeg", None)
                     source = visual.sources.get(result["source"])
                     if (
@@ -188,9 +256,13 @@ def create_app(settings=None, token=None):
                             return (
                                 active["conversation"] is core
                                 and not core.user_speaking
-                                and source is not None
-                                and source.enabled
-                                and source.generation == evidence["generation"]
+                                and (
+                                    integration_events.valid(evidence)
+                                    if evidence["source"].startswith("integration:")
+                                    else source is not None
+                                    and source.enabled
+                                    and source.generation == evidence["generation"]
+                                )
                                 and behaviors.recheck(intent, now=time.time())
                             )
 
@@ -205,7 +277,12 @@ def create_app(settings=None, token=None):
                                         behavior_config.value.conversation_window,
                                     )
                                 else:
-                                    await core.proactive(intent, still_valid)
+                                    scheduled = await core.proactive(intent, still_valid)
+                                    behaviors._record(
+                                        Event(**intent["evidence"]),
+                                        "greeting_scheduled" if scheduled else "greeting_declined",
+                                        time.time(),
+                                    )
                             elif intent["action"] == "bookmark":
                                 for frame_id in intent["evidence"]["frames"][:2]:
                                     frame = visual.frames.get(frame_id)
@@ -238,14 +315,22 @@ def create_app(settings=None, token=None):
                 async with asyncio.timeout(2):
                     await ws.send_json(message)
 
-    async def robot_preview(source, generation, captured, jpeg, uncertainty, moving=False):
+    async def robot_preview(
+        source, generation, captured, jpeg, uncertainty, moving=False, sequence=None
+    ):
         if not source.enabled or source.generation != generation:
             return
         if perception["worker"] is None:
             perception["worker"] = PerceptionWorker(settings.perception_models)
         perception["source"] = source.id
         perception["worker"].offer(
-            source.id, generation, captured, jpeg, uncertainty=uncertainty, moving=moving
+            source.id,
+            generation,
+            captured,
+            jpeg,
+            uncertainty=uncertainty,
+            moving=moving,
+            sequence=sequence,
         )
 
     registry.add_connection(Connection("questions", "session"))
@@ -368,6 +453,7 @@ def create_app(settings=None, token=None):
             await recorder.start()
             resources.push_async_callback(recorder.close)
             behavior_config = BehaviorConfiguration(settings.data_dir / "behaviors.json", behaviors)
+            apply_presence_settings()
             operations = OperationStore(
                 settings.data_dir / "operations.sqlite",
                 max_bytes=settings.operation_max_mib * 1024 * 1024,
@@ -459,6 +545,7 @@ def create_app(settings=None, token=None):
     app.state.visual, app.state.active = visual, active
     app.state.projects, app.state.executor = projects, executor
     app.state.recorder = recorder
+    app.state.integration_events = integration_events
     app.add_middleware(
         TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost", "testserver"]
     )
@@ -492,13 +579,174 @@ def create_app(settings=None, token=None):
     async def index():
         return FileResponse(static / "index.html")
 
+    def response_timing_snapshot():
+        core = active["conversation"]
+        return (
+            {"available": True, **core.timings.snapshot()}
+            if core
+            else {
+                "available": False,
+                "samples": [],
+                "sample_limit": 128,
+                "scope": "No active conversation owner; no response timing samples available.",
+            }
+        )
+
+    clock_owner = uuid.uuid4().hex
+
+    def read_clock_metadata(request):
+        values = [
+            request.headers.get(key)
+            for key in ("x-clock-owner", "x-source-monotonic", "x-clock-uncertainty")
+        ]
+        if not any(value is not None for value in values):
+            return None
+        owner, monotonic, bound = values
+        if owner != clock_owner or monotonic is None or bound is None:
+            raise ValueError("invalid_clock_metadata")
+        monotonic, bound = float(monotonic), float(bound)
+        if (
+            not all(math.isfinite(value) and value >= 0 for value in (monotonic, bound))
+            or bound > 10
+        ):
+            raise ValueError("invalid_clock_metadata")
+        return owner, monotonic, bound
+
+    @app.get("/api/clock")
+    async def clock_sample(request: Request):
+        authorized(request)
+        from fastapi.responses import JSONResponse
+
+        return JSONResponse(
+            {"time": time.time(), "owner": clock_owner},
+            headers={"Cache-Control": "no-store"},
+        )
+
+    @app.get("/api/response-timings")
+    async def response_timings(request: Request):
+        authorized(request)
+        return response_timing_snapshot()
+
+    @app.get("/api/speech-activity")
+    async def speech_activity(request: Request):
+        authorized(request)
+        core = active["conversation"]
+        return (
+            {"available": True, **core.speech_activity.snapshot()} if core else {"available": False}
+        )
+
+    @app.get("/api/gesture-activity")
+    async def gesture_activity(request: Request):
+        from fastapi.responses import JSONResponse
+
+        authorized(request)
+        core = active["conversation"]
+        return JSONResponse(
+            {"available": True, **core.gesture_activity.snapshot()} if core else {"available": False},
+            headers={"Cache-Control": "no-store"},
+        )
+
+    workload_owner = uuid.uuid4().hex
+    workload_started = time.monotonic()
+
+    @app.get("/api/workload-status")
+    async def workload_status(request: Request):
+        authorized(request)
+        core = active["conversation"]
+        worker = perception["worker"]
+        visual.expire()
+        index_storage, journal_storage = await asyncio.gather(
+            asyncio.to_thread(projects.storage_status),
+            asyncio.to_thread(operations.storage_status),
+        )
+        storage = visual.totals()
+        bounds = {
+            "rolling_bytes": (storage["rolling_bytes"], visual.max_bytes),
+            "pin_bytes": (storage["pin_bytes"], visual.pin_bytes),
+            "pins": (storage["pins"], visual.pin_count),
+            "rolling_frames": (storage["rolling_frames"], visual.max_frames),
+            "model_image_workers": (
+                storage["model_image_workers"],
+                storage["model_image_worker_limit"],
+            ),
+            "integration_pending": (len(executor.executions), executor.max_pending),
+            "confirmation_and_cancellation_pending": (
+                len(executor.pending) + len(executor.cancellations),
+                50,
+            ),
+            "index_bytes": (index_storage["bytes"], index_storage["max_bytes"]),
+            "index_staging_bytes": (
+                index_storage["staging_bytes"],
+                index_storage["staging_max_bytes"],
+            ),
+            "journal_bytes": (journal_storage["bytes"], journal_storage["max_bytes"]),
+        }
+        project_timing = projects.timings.snapshot()
+        project_timing["samples"] = project_timing["samples"][-32:]
+        project_timing["sample_limit"] = 32
+        response_timing = response_timing_snapshot()
+        response_timing["samples"] = response_timing["samples"][-32:]
+        response_timing["sample_limit"] = 32
+        return {
+            "version": 1,
+            "timings": {
+                "project": project_timing,
+                "tools": executor.timing_snapshot(),
+                "response": response_timing,
+                "gesture": {"owner": core.timings.owner, **core.gesture_timings.snapshot()}
+                if core
+                else None,
+                "capture": capture_timings.snapshot(),
+                "perception": perception_timings.snapshot(),
+                "retrieval": {"owner": core.timings.owner, **core.retrieval_timings.snapshot()}
+                if core
+                else None,
+            },
+            "bounds": {
+                name: {"used": used, "limit": limit} for name, (used, limit) in bounds.items()
+            },
+            "indexed_files": index_storage["files"],
+            "journal_unresolved": journal_storage["unresolved"],
+            "owner": workload_owner,
+            "elapsed_seconds": max(0, time.monotonic() - workload_started),
+            "mode": core.mode if core else "idle",
+            "sources": [
+                {
+                    "id": source.id,
+                    "kind": source.kind,
+                    "generation": source.generation,
+                    "enabled": source.enabled,
+                    "browser_upload_accepted": source.upload_accepted,
+                    "retained_frames": sum(
+                        frame.source == source.id for frame in visual.frames.values()
+                    ),
+                }
+                for source in visual.sources.values()
+            ],
+            "storage": visual.totals(),
+            "resources": resource_monitor.snapshot(),
+            "perception": worker.health() if worker else None,
+            "thumbs_enabled": bool(core and core.thumbs.enabled),
+            "retained_accepted_thumbs": len(core.thumbs.accepted) if core else 0,
+            "speech": {
+                key: value
+                for key, value in core.speech_activity.snapshot().items()
+                if key in {"owner", "elapsed_seconds", "counts", "dropped_samples"}
+            }
+            if core
+            else None,
+            "integration_pending": len(executor.executions),
+            "pending_confirmations": len(executor.pending),
+            "physical_qualification": False,
+        }
+
     @app.get("/api/status")
     async def status(request: Request):
         authorized(request)
         visual.expire()
         return {
             "settings": settings.public(),
-            "sources": [asdict(s) for s in visual.sources.values()],
+            "sources": visual.source_status(),
             "storage": visual.totals(),
             "history": visual.browse(),
             "operations": await asyncio.to_thread(operations.recent),
@@ -513,11 +761,13 @@ def create_app(settings=None, token=None):
                 "active_attempts": gate.active_usage(),
             },
             "resources": resource_monitor.snapshot(),
+            "response_timings": response_timing_snapshot(),
             **(await asyncio.to_thread(projects.snapshot)),
             "perception": {
                 "enabled": settings.perception_enabled,
                 "latest": perception["latest"],
                 "error": perception["error"],
+                "worker": perception["worker"].health() if perception["worker"] else None,
             },
             "events": list(behaviors.log),
             "thumbs": {
@@ -531,10 +781,27 @@ def create_app(settings=None, token=None):
             else {"enabled": settings.thumb_responses_enabled, "question": None, "feedback": []},
         }
 
+    def apply_presence_settings():
+        value = behavior_config.value
+        perception_events.configure_presence(
+            confirmation=value.presence_confirmation,
+            absence=value.presence_absence,
+            rearm=value.presence_rearm,
+        )
+
     @app.get("/api/behaviors")
     async def behavior_status(request: Request):
         authorized(request)
-        return {"configuration": behavior_config.value.model_dump(), "events": list(behaviors.log)}
+        return {
+            "configuration": behavior_config.value.model_dump(),
+            "events": list(behaviors.log),
+            "observations": behaviors.observations(),
+            "trigger_window": {
+                "busy": trigger_window.busy,
+                "starting": trigger_window.starting,
+                "error": trigger_window.error,
+            },
+        }
 
     @app.post("/api/behaviors/test")
     async def behavior_test(request: Request):
@@ -582,6 +849,7 @@ def create_app(settings=None, token=None):
             data.extend(chunk)
         try:
             behavior_config.save(json.loads(data))
+            apply_presence_settings()
         except (ValidationError, ValueError, TypeError):
             raise HTTPException(400, "Invalid behavior configuration") from None
         return {"saved": True}
@@ -699,33 +967,38 @@ def create_app(settings=None, token=None):
         raise HTTPException(400, "Invalid transcript action")
 
     @app.get("/api/transcripts/{session}/export")
-    async def export_transcript(session: str, request: Request):
+    async def export_transcript(session: str, request: Request, format: str = "text"):
         authorized(request)
+        if format not in {"text", "json"}:
+            raise HTTPException(400, "Unsupported transcript format")
         try:
             session = uuid.UUID(hex=session).hex
         except ValueError:
             raise HTTPException(400, "Invalid session ID") from None
-        rows = await asyncio.to_thread(transcripts.entries, session, include_session=True)
-        if not rows:
-            raise HTTPException(404, "No saved transcript for this session")
-        data = "\n\n".join(
-            f"{row['role']} ({row['kind']}):\n{row['text']}"
-            + (
-                "\nMetadata: " + json.dumps(row["metadata"], sort_keys=True)
-                if row["metadata"]
-                else ""
+        if recorder.paused:
+            raise HTTPException(409, "Transcript state is changing; retry export")
+        generation = recorder.state["generation"]
+        if transcript_exports.locked():
+            raise HTTPException(
+                429, "Transcript exports busy; retry after the current exports finish"
             )
-            for row in rows
+        await transcript_exports.acquire()
+        task = asyncio.create_task(
+            asyncio.to_thread(transcript_export_response, transcripts, session, format)
         )
-        return Response(
-            data,
-            media_type="text/plain; charset=utf-8",
-            headers={
-                "Content-Disposition": f'attachment; filename="iago-transcript-{session}.txt"',
-                "Cache-Control": "no-store",
-                "X-Content-Type-Options": "nosniff",
-            },
-        )
+
+        # Cancellation of the HTTP request cannot release capacity while its thread
+        # still owns a database snapshot/serialized response.
+        def finished(completed):
+            transcript_exports.release()
+            if not completed.cancelled():
+                completed.exception()  # Also observe errors after an HTTP cancellation.
+
+        task.add_done_callback(finished)
+        response = await asyncio.shield(task)
+        if recorder.paused or recorder.state["generation"] != generation:
+            raise HTTPException(409, "Transcript state changed; retry export")
+        return response
 
     @app.get("/api/notes")
     async def list_notes(request: Request, offset: int = 0):
@@ -1073,64 +1346,225 @@ def create_app(settings=None, token=None):
             return {"status": "deleted"}
         raise HTTPException(400, "Invalid note action")
 
+    async def visual_request(request):
+        raw = bytearray()
+        async for chunk in request.stream():
+            if len(raw) + len(chunk) > 4096:
+                raise HTTPException(413, "Visual request too large")
+            raw.extend(chunk)
+        try:
+            body = json.loads(raw)
+            if not isinstance(body, dict):
+                raise ValueError()
+        except ValueError:
+            raise HTTPException(400, "Invalid visual request") from None
+        return body
+
     @app.post("/api/source")
     async def source(request: Request):
         authorized(request)
-        body = await request.json()
+        body = await visual_request(request)
+        kind = body.get("kind")
+        label = body.get("label", kind)
+        if (
+            not isinstance(kind, str)
+            or kind not in {"camera", "screen", "upload"}
+            or not isinstance(label, str)
+            or not 1 <= len(label) <= 120
+        ):
+            raise HTTPException(400, "Invalid visual source")
+        try:
+            label.encode("utf-8")
+        except UnicodeError:
+            raise HTTPException(400, "Invalid visual source") from None
         core = conversation()
         if core.mode == "idle":
             raise HTTPException(409, "Enter Aware or Conversation before capture")
-        return asdict(
-            visual.source(
-                page_owner or core.connection, body["kind"], body.get("label", body["kind"])
-            )
-        )
+        return asdict(visual.source(page_owner or core.connection, kind, label))
 
     @app.post("/api/frame/{source_id}/{generation}")
     async def frame(source_id: str, generation: int, request: Request):
         authorized(request)
-        if int(request.headers.get("content-length", "0")) > 20 * 1024 * 1024:
-            raise HTTPException(413, "Image too large")
-        data = bytearray()
-        async for chunk in request.stream():
-            data.extend(chunk)
-            if len(data) > 20 * 1024 * 1024:
-                raise HTTPException(413, "Image too large")
-        prepared = await asyncio.to_thread(visual.prepare, bytes(data))
-        captured = float(request.headers.get("x-captured-at", "0"))
-        result = visual.add(source_id, generation, captured, prepared)
-        return visual.describe(result)
+        source = visual.sources.get(source_id)
+        kind = source.kind if source else "unknown"
+        with capture_timings.measure(kind + "_archive"):
+            with visual.upload_attempt(source_id, generation):
+                try:
+                    length = int(request.headers.get("content-length", "0"))
+                    captured = float(request.headers.get("x-captured-at", "0"))
+                    clock_metadata = read_clock_metadata(request)
+                    raw_sequence = request.headers.get("x-frame-sequence")
+                    sequence = None
+                    if raw_sequence is not None:
+                        if (
+                            not raw_sequence.isascii()
+                            or not raw_sequence.isdigit()
+                            or len(raw_sequence) > 16
+                        ):
+                            raise ValueError()
+                        sequence = int(raw_sequence)
+                    bound = request.headers.get("x-capture-uncertainty")
+                    uncertainty = None if bound is None else float(bound)
+                    if uncertainty is not None and (
+                        not math.isfinite(uncertainty) or not 0 <= uncertainty <= visual.retention
+                    ):
+                        raise ValueError()
+                    if length < 0 or not math.isfinite(captured):
+                        raise ValueError()
+                except ValueError:
+                    raise HTTPException(400, "Invalid image metadata") from None
+                visual.validate_frame(source_id, generation, captured, sequence=sequence)
+                if length > 20 * 1024 * 1024:
+                    raise HTTPException(413, "Image too large")
+                with frame_ingress.slot(source_id) as decode:
+                    try:
+                        async with asyncio.timeout(10):
+                            data = bytearray()
+                            async for chunk in request.stream():
+                                if len(data) + len(chunk) > 20 * 1024 * 1024:
+                                    raise HTTPException(413, "Image too large")
+                                data.extend(chunk)
+                            visual.validate_frame(
+                                source_id, generation, captured, sequence=sequence
+                            )
+                            prepare = visual.prepare
+                            if visual.sources[source_id].kind == "upload":
+                                prepare = partial(visual.prepare, preserve_png=True)
+                            prepared = await decode(bytes(data), prepare)
+                    except TimeoutError:
+                        raise HTTPException(408, "Image upload or processing timed out") from None
+                result = visual.add(
+                    source_id,
+                    generation,
+                    captured,
+                    prepared,
+                    capture_uncertainty=uncertainty,
+                    sequence=sequence,
+                )
+                if clock_metadata is not None:
+                    result.clock_owner, result.source_monotonic, result.clock_uncertainty = (
+                        clock_metadata
+                    )
+                    result.timing_note = "Browser canvas sampling time mapped to controller; clock bound does not qualify sensor exposure timing"
+                return visual.describe(result)
 
     @app.post("/api/perception/{source_id}/{generation}")
     async def detector_frame(source_id: str, generation: int, request: Request):
         authorized(request)
-        source = visual.sources.get(source_id)
         if not settings.perception_enabled:
             raise HTTPException(409, "Local perception is disabled in configuration")
-        if (
-            not source
-            or not source.enabled
-            or source.kind != "camera"
-            or source.generation != generation
-            or conversation().mode == "idle"
-        ):
-            raise HTTPException(409, "Ineligible or stale live camera")
-        if perception["source"] not in {None, source_id}:
-            previous = visual.sources.get(perception["source"])
-            if previous and previous.enabled:
-                raise HTTPException(409, "Another live camera owns perception")
-        data = bytearray()
-        async for chunk in request.stream():
-            data.extend(chunk)
-            if len(data) > 1024 * 1024:
-                raise HTTPException(413, "Detector frame too large")
-        if not perception["worker"]:
-            perception["worker"] = PerceptionWorker(settings.perception_models)
-        perception["source"] = source_id
-        perception["worker"].offer(
-            source_id, generation, float(request.headers.get("x-captured-at", "0")), bytes(data)
-        )
+        core = conversation()
+        try:
+            raw_sequence = request.headers.get("x-frame-sequence")
+            sequence = None
+            if raw_sequence is not None:
+                if (
+                    not raw_sequence.isascii()
+                    or not raw_sequence.isdigit()
+                    or len(raw_sequence) > 16
+                ):
+                    raise ValueError()
+                sequence = int(raw_sequence)
+                if sequence > 9007199254740991:
+                    raise ValueError()
+            clock_metadata = read_clock_metadata(request)
+            uncertainty = clock_metadata[2] if clock_metadata is not None else 1.0
+            captured = float(request.headers.get("x-captured-at", "0"))
+            length = int(request.headers.get("content-length", "0"))
+            if not math.isfinite(captured) or length < 0:
+                raise ValueError()
+        except ValueError:
+            raise HTTPException(400, "Invalid detector metadata") from None
+        if length > 1024 * 1024:
+            raise HTTPException(413, "Detector frame too large")
+
+        def validate():
+            source = visual.sources.get(source_id)
+            if (
+                not source
+                or not source.enabled
+                or source.kind != "camera"
+                or source.generation != generation
+                or active["conversation"] is not core
+                or core.mode == "idle"
+            ):
+                raise HTTPException(409, "Ineligible or stale live camera")
+            if (sequence is None and source.last_detector_sequence >= 0) or (
+                sequence is not None and sequence <= source.last_detector_sequence
+            ):
+                raise HTTPException(409, "Stale detector sequence")
+            now = time.time()
+            if now - captured > 1 or captured > now + 0.1:
+                raise HTTPException(409, "Stale detector frame")
+            if perception["source"] not in {None, source_id}:
+                previous = visual.sources.get(perception["source"])
+                if previous and previous.enabled:
+                    raise HTTPException(409, "Another live camera owns perception")
+
+        validate()
+        with detector_ingress.slot(source_id):
+            data = bytearray()
+            try:
+                async with asyncio.timeout(10):
+                    async for chunk in request.stream():
+                        if len(data) + len(chunk) > 1024 * 1024:
+                            raise HTTPException(413, "Detector frame too large")
+                        data.extend(chunk)
+            except TimeoutError:
+                raise HTTPException(408, "Detector upload timed out") from None
+            validate()
+            if not perception["worker"]:
+                perception["worker"] = PerceptionWorker(settings.perception_models)
+            perception["source"] = source_id
+            perception["worker"].offer(
+                source_id,
+                generation,
+                captured,
+                bytes(data),
+                uncertainty=uncertainty,
+                sequence=sequence,
+            )
+            if sequence is not None:
+                visual.sources[source_id].last_detector_sequence = sequence
         return {"status": "queued"}
+
+    @app.get("/api/history")
+    async def history_page(
+        request: Request,
+        source: str = Query(default="", max_length=128),
+        query: str = Query(default="", max_length=500),
+        before: str = Query(default="", max_length=128),
+        start: float = 0,
+        end: float | None = None,
+    ):
+        authorized(request)
+        end = time.time() if end is None else end
+        if not math.isfinite(start) or not math.isfinite(end) or start > end:
+            raise HTTPException(400, "Invalid history time range")
+        visual.expire()
+        anchor = visual.get(before) if before else None
+        candidates = sorted(
+            (
+                f
+                for f in visual.frames.values()
+                if (not source or f.source == source)
+                and start <= f.captured <= end
+                and (not query or query.lower() in " ".join(f.labels + [f.pin]).lower())
+                and (anchor is None or (f.captured, f.id) < (anchor.captured, anchor.id))
+            ),
+            key=lambda f: (f.captured, f.id),
+            reverse=True,
+        )
+        batch = candidates[:24]
+        return {
+            "frames": [visual.describe(f) for f in batch],
+            "next_before": batch[-1].id if len(candidates) > 24 else None,
+            "end": end,
+            "sources": visual.source_status(),
+            "context_generation": visual.context_generation,
+            "server_time": time.time(),
+            "retention": visual.retention,
+        }
 
     @app.get("/api/frame/{frame_id}")
     async def image(frame_id: str, request: Request, thumbnail: bool = False):
@@ -1138,14 +1572,70 @@ def create_app(settings=None, token=None):
         frame = visual.get(frame_id)
         return Response(
             frame.thumbnail if thumbnail else frame.image,
-            media_type="image/jpeg",
-            headers={"Cache-Control": "no-store"},
+            media_type="image/png"
+            if not thumbnail and frame.transformation.get("stored_format") == "PNG"
+            else "image/jpeg",
+            headers={
+                "Cache-Control": "no-store",
+                "X-Iago-Expires-In": "pinned"
+                if frame.pin
+                else str(max(0, frame.captured + visual.retention - visual.clock())),
+            },
         )
+
+    @app.post("/api/capture")
+    async def requested_capture(
+        request: Request, source: str | None = Query(default=None, min_length=1, max_length=128)
+    ):
+        authorized(request)
+        core = conversation()
+        if core.mode == "idle":
+            raise HTTPException(409, "Enable Aware or Conversation before capture")
+        if source is None:
+            if not robot_session or not robot_session.source:
+                raise HTTPException(409, "No robot camera source is available")
+            source = robot_session.source.id
+        epoch, generation = core.epoch, visual.context_generation
+        context = CallContext(
+            core.session,
+            epoch,
+            valid=lambda: (
+                active["conversation"] is core
+                and core.mode != "idle"
+                and core.epoch == epoch
+                and visual.context_generation == generation
+            ),
+            capabilities=frozenset(integrations.capabilities),
+        )
+        result = await executor.execute("visual__session__capture_now", {"source": source}, context)
+        if result["status"] != "ok":
+            raise HTTPException(409, result["status"])
+        if not context.valid():
+            raise HTTPException(409, "canceled")
+        return result["result"]["frame"]
 
     @app.post("/api/visual")
     async def visual_action(request: Request):
         authorized(request)
-        body = await request.json()
+        body = await visual_request(request)
+        action = body.get("action")
+        if not isinstance(action, str) or action not in {"pin", "unpin", "clear", "off"}:
+            raise HTTPException(400, "Invalid visual action")
+        if action in {"pin", "unpin"}:
+            frame_id = body.get("frame")
+            label = body.get("label", "Reference")
+            if not isinstance(frame_id, str) or not 1 <= len(frame_id) <= 128:
+                raise HTTPException(400, "Invalid frame ID")
+            if not isinstance(label, str) or len(label) > 100:
+                raise HTTPException(400, "Invalid pin label")
+            try:
+                label.encode("utf-8")
+            except UnicodeError:
+                raise HTTPException(400, "Invalid pin label") from None
+        elif body.get("source") is not None and (
+            not isinstance(body["source"], str) or not 1 <= len(body["source"]) <= 128
+        ):
+            raise HTTPException(400, "Invalid source ID")
         core = conversation()
         if body["action"] == "pin":
             visual.pin(body["frame"], body.get("label", "Reference"))
@@ -1155,7 +1645,7 @@ def create_app(settings=None, token=None):
             await core.clear_evidence(body.get("source"), disable=body["action"] == "off")
         else:
             raise HTTPException(400, "Unknown visual action")
-        return {"sources": [asdict(s) for s in visual.sources.values()]}
+        return {"sources": visual.source_status()}
 
     async def authenticate_ws(ws):
         origin = ws.headers.get("origin", "")
@@ -1240,9 +1730,21 @@ def create_app(settings=None, token=None):
                             await trigger_window.cancel()
                         await core.stop(generation=int(message.get("generation", 0)))
                     elif kind == "speech_start" and not robot_mode:
-                        captured = float(message.get("captured", 0))
-                        if 0 <= time.time() - captured <= 2:
+                        captured = message.get("captured")
+                        uncertainty = message.get("clock_uncertainty")
+                        precise = (
+                            message.get("timing_unknown") is not True
+                            and type(captured) in (int, float)
+                            and math.isfinite(captured)
+                            and 0 <= time.time() - captured <= 2
+                            and type(uncertainty) in (int, float)
+                            and math.isfinite(uncertainty)
+                            and 0 <= uncertainty <= 0.1
+                        )
+                        if precise:
                             await core.speech_onset(captured)
+                        else:
+                            await core.uncertain_speech_onset()
                     elif kind == "robot_reconnect" and robot_session:
                         robot_session.reconnect()
                     elif kind == "robot_motion" and robot_session:
@@ -1260,11 +1762,31 @@ def create_app(settings=None, token=None):
                         await change_mode(core, message["mode"])
                     elif kind == "user":
                         core.selected_source = message.get("source") or None
-                        await core.user_turn(message.get("text", ""))
+                        await core.user_turn(
+                            message.get("text", ""),
+                            frame_id=message.get("frame"),
+                            region=message.get("region"),
+                        )
                     elif kind == "voice_preview":
                         await core.preview_voice()
                     elif kind == "source":
                         core.selected_source = message.get("source") or None
+                    elif kind == "speech_reference":
+                        request_id = message.get("request")
+                        if not isinstance(request_id, str) or not 1 <= len(request_id) <= 64:
+                            raise ToolError("invalid_reference_request")
+                        reference = core.select_speech_reference(
+                            message.get("frame"), message.get("region")
+                        )
+                        await core.emit(
+                            "speech_reference",
+                            status="armed" if reference else "cleared",
+                            request=request_id,
+                            token=reference["token"] if reference else None,
+                            frame=visual.describe(visual.get(reference["frame_id"]))
+                            if reference
+                            else None,
+                        )
                     elif kind == "confirmation":
                         operation = message.get("operation_id")
                         future = core.confirmations.get(operation)
@@ -1338,7 +1860,8 @@ def create_app(settings=None, token=None):
                         if (
                             not isinstance(marker, dict)
                             or marker.get("type") != "commit"
-                            or set(marker) - {"type", "capture_start", "capture_end"}
+                            or set(marker)
+                            - {"type", "capture_start", "capture_end", "capture_clock_uncertainty"}
                         ):
                             raise ValueError()
                         if set(marker) != {"type"}:
@@ -1354,6 +1877,15 @@ def create_app(settings=None, token=None):
                             ):
                                 raise ValueError()
                             timing = {"capture_start": start, "capture_end": end}
+                            if "capture_clock_uncertainty" in marker:
+                                bound = marker["capture_clock_uncertainty"]
+                                if (
+                                    type(bound) not in (int, float)
+                                    or not math.isfinite(bound)
+                                    or not 0 <= bound <= 10
+                                ):
+                                    raise ValueError()
+                                timing["capture_clock_uncertainty"] = bound
                     except ValueError:
                         raise ToolError("invalid_microphone_marker") from None
                 if (
@@ -1370,12 +1902,24 @@ def create_app(settings=None, token=None):
             if active["conversation"]:
                 await active["conversation"].stop()
         finally:
-            if active["audio"] is ws:
-                active["audio"] = None
-                await trigger_window.cancel()
-                await close_stt()
-                core = active["conversation"]
-                if core and core.mode == "conversation":
-                    await core.set_mode("aware")
+            with CancelScope(shield=True):
+                if active["audio"] is ws:
+                    try:
+                        recognition_task = active["stt_task"]
+                        if recognition_task and recognition_task is not asyncio.current_task():
+                            recognition_task.cancel()
+                        core = active["conversation"]
+                        try:
+                            if core and core.mode == "conversation":
+                                await core.set_mode("aware")
+                        finally:
+                            try:
+                                await trigger_window.cancel()
+                            finally:
+                                await close_stt()
+                    finally:
+                        # Retain ownership until this socket's cleanup completes.
+                        if active["audio"] is ws:
+                            active["audio"] = None
 
     return app

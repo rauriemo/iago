@@ -15,6 +15,9 @@ from reachy_brain.knowledge.process import capture_parser
 from reachy_brain.knowledge.staging import StagingBudget
 from reachy_brain.knowledge.timing import ProjectTimings, timed
 
+# Increment when extraction changes require existing source bytes to be reprocessed.
+EXTRACTION_VERSION = 1
+
 EXCLUDED = {
     ".git",
     ".venv",
@@ -45,12 +48,23 @@ class ProjectIndex:
         self.refreshing = set()
         self.errors = {}
         with self.database() as db:
+            extraction_version = db.execute("PRAGMA user_version").fetchone()[0]
+            if extraction_version > EXTRACTION_VERSION:
+                raise ToolError("index_version_unsupported")
             db.executescript("""
                 CREATE TABLE IF NOT EXISTS projects(id TEXT PRIMARY KEY,name TEXT,root TEXT,generation INTEGER,updated REAL);
                 CREATE TABLE IF NOT EXISTS files(id TEXT PRIMARY KEY,project TEXT,relative TEXT,revision TEXT,status TEXT);
                 CREATE TABLE IF NOT EXISTS passages(id TEXT PRIMARY KEY,file TEXT,project TEXT,revision TEXT,locator_kind TEXT,locator TEXT,offset INTEGER,text TEXT);
                 CREATE VIRTUAL TABLE IF NOT EXISTS search USING fts5(id UNINDEXED,project UNINDEXED,text);
             """)
+            if extraction_version < EXTRACTION_VERSION:
+                # Retire old derived content before this index can serve any queries.
+                # Preserve configured roots; the regular refresh loop rebuilds them.
+                db.execute("DELETE FROM search")
+                db.execute("DELETE FROM passages")
+                db.execute("DELETE FROM files")
+                db.execute("UPDATE projects SET generation=generation+1,updated=0")
+                db.execute(f"PRAGMA user_version={EXTRACTION_VERSION}")
 
     @contextmanager
     def database(self):
@@ -108,6 +122,25 @@ class ProjectIndex:
             self.active = project
             self.generation += 1
 
+    def storage_status(self):
+        """Numeric qualification observations without project paths or content."""
+        with self.database() as db:
+            used = (
+                db.execute("PRAGMA page_count").fetchone()[0]
+                * db.execute("PRAGMA page_size").fetchone()[0]
+            )
+            files = db.execute("SELECT COUNT(*) FROM files").fetchone()[0]
+        with self.staging.lock:
+            staging = self.staging.used
+        return {
+            "bytes": used,
+            "max_bytes": self.max_bytes,
+            "files": files,
+            "max_files_per_project": self.max_files,
+            "staging_bytes": staging,
+            "staging_max_bytes": self.staging.limit,
+        }
+
     def snapshot(self):
         with self.lock:
             return {
@@ -145,10 +178,18 @@ class ProjectIndex:
 
     @staticmethod
     def _revision(path):
-        if path.stat().st_size > 20 * 1024 * 1024:
+        maximum = 20 * 1024 * 1024
+        if path.stat().st_size > maximum:
             raise ToolError("over_limit")
+        digest = hashlib.sha256()
+        size = 0
         with path.open("rb") as source:
-            return hashlib.file_digest(source, "sha256").hexdigest()
+            while chunk := source.read(min(65536, maximum - size + 1)):
+                size += len(chunk)
+                if size > maximum:
+                    raise ToolError("over_limit")
+                digest.update(chunk)
+        return digest.hexdigest()
 
     def _parse(self, path):
         with self.workers:
@@ -247,7 +288,16 @@ class ProjectIndex:
                         result = self._parse(path)
                         if not self._allowed(root, path) or self._revision(path) != revision:
                             continue
-                    except (OSError, ToolError):
+                    except ToolError as exc:
+                        # A failed final check cannot attest the pre-extraction hash.
+                        # Clear it so restoring those bytes triggers ordinary refresh.
+                        revision = ""
+                        result = {
+                            "status": "over_limit" if exc.code == "over_limit" else "unavailable",
+                            "passages": [],
+                        }
+                    except OSError:
+                        revision = ""
                         result = {"status": "unavailable", "passages": []}
                 if (
                     not force

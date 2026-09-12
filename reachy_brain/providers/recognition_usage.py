@@ -5,8 +5,9 @@ import time
 
 
 class RecognitionUsage:
-    def __init__(self, gate, model):
+    def __init__(self, gate, model, *, dispatched=True):
         self.gate, self.model = gate, model
+        self.dispatched = dispatched
         self.identity_origin = "local_session"
         self.started = time.monotonic()
         self.status = "closed"
@@ -118,7 +119,8 @@ class RecognitionUsage:
                 "request_id_origin": self.identity_origin,
                 "elapsed_seconds": time.monotonic() - self.started,
                 "sent_audio_seconds": self.counts["sent_pcm_bytes"] / 48000,
-                "billing_usage_complete": False,
+                "billing_usage_complete": not self.dispatched,
+                "dispatched": self.dispatched,
                 "attempt_id": self.active_id,
             },
             model=self.model,

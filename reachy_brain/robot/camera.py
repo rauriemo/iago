@@ -64,7 +64,7 @@ class CameraFeed:
         self.ready.wait(1)
         with self.lock:
             latest = self.latest
-            if not self.enabled or latest is None or time.time() - latest[1] > 1:
+            if not self.enabled or latest is None or not 0 <= time.time() - latest[1] <= 1:
                 return None
             cached = self.encoded.get(preview)
             if cached:
@@ -88,7 +88,11 @@ class CameraFeed:
             },
         )
         with self.lock:
-            if not self.enabled or self.generation != generation:
+            if (
+                not self.enabled
+                or self.generation != generation
+                or not 0 <= time.time() - retrieved <= 1
+            ):
                 return None
             if self.latest and self.latest[2] == sequence:
                 self.encoded[preview] = result

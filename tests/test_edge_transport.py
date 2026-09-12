@@ -76,6 +76,18 @@ async def test_real_edge_client_round_trip_and_cleanup():
             await asyncio.sleep(0.05)
         assert server.started
         await client.start()
+        assert client.capabilities["microphone"] == {
+            "encoding": "pcm_s16le",
+            "rate": 16000,
+            "channels": 1,
+        }
+        assert client.capabilities["playback"] == {
+            "encoding": "pcm_s16le",
+            "rate": 24000,
+            "channels": 1,
+        }
+        assert client.capabilities["local_stop"] is True
+        assert client.capabilities["camera"]["capture_timestamps"] is False
         mode = await client.command("mode", mode="conversation")
         assert mode["mode"] == "conversation"
         authorized = await client.command(

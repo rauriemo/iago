@@ -44,6 +44,13 @@ def test_authenticated_bounded_configuration_api(tmp_path):
     ) as client:
         assert client.get("/api/behaviors").status_code == 401
         headers = {"Authorization": "Bearer test"}
+        observed = client.get("/api/behaviors", headers=headers).json()["observations"]
+        assert observed["total"] == 0 and observed["samples"] == []
+        assert observed["dropped_samples"] == 0 and observed["sample_limit"] == 200
+        assert (
+            client.get("/api/behaviors", headers=headers).json()["observations"]["owner"]
+            == observed["owner"]
+        )
         data = client.get("/api/behaviors", headers=headers).json()["configuration"]
         data["spontaneous"] = False
         assert client.post("/api/behaviors", headers=headers, json=data).status_code == 200

@@ -30,7 +30,7 @@ def newest(channel, value):
         return True
 
 
-def run_worker(incoming, outgoing, stop, models):
+def run_worker(incoming, outgoing, stop, models, *, clock=time.time):
     try:
         import cv2
 
@@ -68,11 +68,7 @@ def run_worker(incoming, outgoing, stop, models):
                     last_captured = -float("inf")
                     settled = packet["captured"] + 0.6
                 captured = packet["captured"]
-                if (
-                    time.time() - captured > 1
-                    or captured > time.time() + 0.1
-                    or captured <= last_captured
-                ):
+                if clock() - captured > 1 or captured > clock() + 0.1 or captured <= last_captured:
                     continue
                 last_captured = captured
                 timestamp = max(last_timestamp + 1, round(captured * 1000))
@@ -108,6 +104,7 @@ def run_worker(incoming, outgoing, stop, models):
                         "source": packet["source"],
                         "generation": packet["generation"],
                         "captured": captured,
+                        "sequence": packet.get("sequence"),
                         "uncertainty": packet.get("uncertainty", 0),
                         "objects": objects,
                         "objects_at": last_objects,
@@ -149,10 +146,18 @@ class PerceptionWorker:
         self.dropped = 0
         self.count = 0
         self.started = time.monotonic()
+        self.exit_reported = False
+        self.offered = 0
+        self.last_offered = None
+        self.last_result = None
 
-    def offer(self, source, generation, captured, jpeg, *, uncertainty=0, moving=False):
+    def offer(
+        self, source, generation, captured, jpeg, *, uncertainty=0, moving=False, sequence=None
+    ):
         if len(jpeg) > 1024 * 1024:
             raise ValueError("detector_frame_limit")
+        self.offered += 1
+        self.last_offered = time.monotonic()
         self.dropped += newest(
             self.incoming,
             {
@@ -161,6 +166,7 @@ class PerceptionWorker:
                 "captured": captured,
                 "jpeg": jpeg,
                 "uncertainty": uncertainty,
+                "sequence": sequence,
                 "moving": moving,
             },
         )
@@ -168,12 +174,39 @@ class PerceptionWorker:
     def poll(self):
         try:
             result = self.outgoing.get_nowait()
+            if "error" in result:
+                self.exit_reported = True
+                return result
             self.count += 1
+            self.last_result = time.monotonic()
             result["effective_fps"] = self.count / max(0.001, time.monotonic() - self.started)
             result["dropped"] = self.dropped
             return result
         except queue.Empty:
+            if (
+                not self.exit_reported
+                and not self.stop_event.is_set()
+                and self.process.exitcode is not None
+            ):
+                self.exit_reported = True
+                return {"error": "perception_worker_exited", "exit_code": self.process.exitcode}
             return None
+
+    def health(self):
+        now = time.monotonic()
+        return {
+            "alive": self.process.is_alive(),
+            "exit_code": self.process.exitcode,
+            "offered_frames": self.offered,
+            "received_results": self.count,
+            "queue_replacements": self.dropped,
+            "seconds_since_offer": None
+            if self.last_offered is None
+            else max(0, now - self.last_offered),
+            "seconds_since_result": None
+            if self.last_result is None
+            else max(0, now - self.last_result),
+        }
 
     def close(self):
         self.stop_event.set()

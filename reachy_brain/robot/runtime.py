@@ -104,13 +104,23 @@ class EdgeRuntime:
         self.motion.stop(now=time.monotonic())
         self.media.hold()
 
+    def _worker_failed(self, exc):
+        self.error = type(exc).__name__
+        self.done.set()
+        try:
+            self.supervisor.stop()
+        except Exception as cleanup:
+            # Preserve coarse failure diagnostics without a native worker traceback
+            # exposing device/provider response text. Heartbeat triggers recovery.
+            self.error += "/" + type(cleanup).__name__
+
     def _motion(self):
         while not self.done.wait(0.05):
             try:
                 self.motion.tick(now=time.monotonic())
             except Exception as exc:
-                self.error = type(exc).__name__
-                self.supervisor.stop()
+                self._worker_failed(exc)
+                return
 
     def _watchdog(self):
         while not self.done.wait(0.02):
@@ -170,8 +180,7 @@ class EdgeRuntime:
                         )
                     sequence += 1
             except Exception as exc:
-                self.error = type(exc).__name__
-                self.supervisor.stop()
+                self._worker_failed(exc)
                 return
 
     def _playback(self):
@@ -216,16 +225,26 @@ class EdgeRuntime:
                             }
                         )
             except Exception as exc:
-                self.error = type(exc).__name__
-                self.supervisor.stop()
+                self._worker_failed(exc)
                 return
 
     def close(self):
         self.done.set()
-        self.camera.close()
-        self.supervisor.stop()
-        self.media.close()
+        self.capture_enabled = False
+        self.finish_requested = False
+        errors = []
+        # Stop output before potentially slow camera cleanup. A failed resource must
+        # not prevent the other owners from stopping/releasing their resources.
+        for release in (self.supervisor.stop, self.camera.close, self.media.close):
+            try:
+                release()
+            except Exception as exc:
+                errors.append(exc)
         for thread in self.threads:
             thread.join(2)
         if any(thread.is_alive() for thread in self.threads):
-            raise RuntimeError("edge_thread_shutdown_timeout")
+            errors.append(RuntimeError("edge_thread_shutdown_timeout"))
+        if len(errors) == 1:
+            raise errors[0]
+        if errors:
+            raise ExceptionGroup("edge_shutdown_failed", errors)

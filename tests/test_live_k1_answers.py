@@ -14,7 +14,7 @@ from reachy_brain.integrations.builtins import register_builtins
 from reachy_brain.integrations.operations import OperationStore
 from reachy_brain.integrations.registry import ActionPolicy, ToolExecutor, ToolRegistry
 from reachy_brain.knowledge.index import ProjectIndex
-from reachy_brain.providers.live import AstraBrain, ProviderGate
+from reachy_brain.providers.live import AstraBrain
 from reachy_brain.storage.notes import Notes
 from reachy_brain.vision.store import VisualStore
 
@@ -22,7 +22,7 @@ from reachy_brain.vision.store import VisualStore
 @pytest.mark.live_provider
 @pytest.mark.features("K1", "C4")
 @pytest.mark.scenario("K1-ASTRA-CANDIDATE-ANSWER-CAPTURE")
-async def test_capture_all_candidate_answers_for_independent_review(tmp_path, record_property):
+async def test_capture_all_candidate_answers_for_independent_review(tmp_path, record_property, live_gate):
     settings = Settings()
     if not settings.openai_api_key.get_secret_value():
         pytest.skip("OPENAI_API_KEY missing in private setup")
@@ -60,7 +60,7 @@ async def test_capture_all_candidate_answers_for_independent_review(tmp_path, re
     register_builtins(registry, policy, visual, index, notes)
     journal = OperationStore(tmp_path / "operations.sqlite")
     executor = ToolExecutor(registry, policy, journal)
-    gate = ProviderGate(settings)
+    gate = live_gate
     brain = AstraBrain(settings, gate)
     captured = []
     core = None

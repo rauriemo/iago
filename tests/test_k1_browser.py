@@ -199,6 +199,14 @@ def test_browser_all_candidate_queries_reindex_remove_and_late_response(
                     for row in timings["samples"]
                 )
                 assert not errors
+                with page.expect_download() as response_download:
+                    page.get_by_role("button", name="Export response timings", exact=True).click()
+                response_file = tmp_path / "response-timings.json"
+                response_download.value.save_as(response_file)
+                response_timings = json.loads(response_file.read_text(encoding="utf-8"))
+                assert response_timings["sample_limit"] == 128
+                assert isinstance(response_timings["samples"], list)
+                assert "physical" in response_timings["scope"]
                 record_property("sample_count", variants)
                 record_property(
                     "measurements",

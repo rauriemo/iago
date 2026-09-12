@@ -5,6 +5,45 @@ import pytest
 from reachy_brain.behavior.engine import BehaviorEngine, Event, Rule
 
 
+@pytest.mark.features("P4", "P6", "P8", "D6")
+@pytest.mark.scenario("BEHAVIOR-CANCELLATION-OBSERVATIONS")
+@pytest.mark.parametrize("cause", ["interrupt", "source"])
+def test_pending_cancellation_retains_sequence_and_source_generation(cause):
+    engine = BehaviorEngine()
+    engine.mode = "aware"
+    engine.rules["wave"].enabled = True
+    event = Event("wave-1", "camera", "wave_detected", 100, 0.99, generation=7)
+    assert engine.offer(event, now=100) == "queued"
+    if cause == "interrupt":
+        engine.interrupt(now=101)
+    else:
+        engine.invalidate_source("camera", 8, now=101)
+    report = engine.observations()
+    assert report["total"] == 2 and report["dropped_samples"] == 0
+    assert [r["sequence"] for r in report["samples"]] == [1, 2]
+    assert report["samples"][-1]["generation"] == 7
+    assert report["samples"][-1]["decision"] == (
+        "canceled_by_interruption" if cause == "interrupt" else "source_invalidated"
+    )
+    assert engine.pending is None
+    assert engine.take(now=102) is None
+    report["samples"][-1]["decision"] = "changed"
+    assert engine.observations()["samples"][-1]["decision"] != "changed"
+
+
+@pytest.mark.features("P4", "P6", "D6")
+@pytest.mark.scenario("BEHAVIOR-OBSERVATION-RETENTION")
+def test_dropped_decisions_are_explicit():
+    engine = BehaviorEngine()
+    for i in range(205):
+        engine.offer(Event(str(i), "camera", "wave_detected", 100, 0.9), now=100)
+    report = engine.observations()
+    assert report["total"] == 205 and report["dropped_samples"] == 5
+    assert len(report["samples"]) == 200
+    assert report["samples"][0]["sequence"] == 6
+    assert report["owner"] != BehaviorEngine().observations()["owner"]
+
+
 @pytest.mark.features("P4", "P5", "P6", "P8", "E1")
 @pytest.mark.scenario("BEHAVIOR-EVENT-RESTRAINT")
 def test_dedupe_freshness_cooldowns_and_speech_priority():

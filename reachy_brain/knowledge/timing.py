@@ -32,6 +32,7 @@ class ProjectTimings:
             return {
                 "samples": [dict(row) for row in self.samples],
                 "counts": dict(self.counts),
+                "total": self.sequence,
                 "sample_limit": 256,
                 "scope": "Local worker execution including internal lock/parser waits; excludes worker-queue wait, provider reasoning, network and physical playout. Latest 256 completions; counts cover this process lifetime.",
             }

@@ -27,7 +27,6 @@ from reachy_brain.providers.live import (
     AstraBrain,
     ElevenSpeech,
     OpenAISpeech,
-    ProviderGate,
     Transcription,
 )
 from reachy_brain.vision.store import VisualStore
@@ -46,8 +45,8 @@ def live_settings():
 @pytest.mark.live_provider
 @pytest.mark.features("C4", "C7")
 @pytest.mark.scenario("PROVIDER-ASTRA-STREAM")
-async def test_astra_stream(live_settings):
-    brain = AstraBrain(live_settings, ProviderGate(live_settings))
+async def test_astra_stream(live_settings, live_gate):
+    brain = AstraBrain(live_settings, live_gate)
     try:
         events = [
             event
@@ -66,8 +65,9 @@ async def test_astra_stream(live_settings):
 @pytest.mark.live_provider
 @pytest.mark.features("C1", "C6", "D6")
 @pytest.mark.scenario("PROVIDER-OPENAI-SPEECH-TRANSCRIPTION")
-async def test_synthetic_speech_transcription(live_settings, record_property):
-    gate = ProviderGate(live_settings)
+async def test_synthetic_speech_transcription(live_settings, record_property, tmp_path, live_gate):
+    gate = live_gate
+    storage = gate.persistence
     voice, stt = OpenAISpeech(live_settings, gate), Transcription(live_settings, gate)
     try:
         pcm = b"".join(
@@ -89,6 +89,14 @@ async def test_synthetic_speech_transcription(live_settings, record_property):
     finally:
         await stt.close()
         await voice.close()
+        await storage.close()
+    checkpoint = await asyncio.to_thread(storage.load)
+    assert not checkpoint.active_attempts
+    assert set(checkpoint.identities) == gate.seen_usage
+    assert checkpoint.unknown_charges == gate.unknown_charges
+    assert checkpoint.estimated_usd == gate.estimated_usd
+    assert {r["provider"] for r in gate.usage} == {"openai_tts", "openai_stt"}
+    assert all(r["usage"]["dispatched"] for r in gate.usage)
     row = next(r for r in gate.usage if r["provider"] == "openai_stt")
     usage = row["usage"]
     assert usage["completed_items"] == 1
@@ -109,6 +117,11 @@ async def test_synthetic_speech_transcription(live_settings, record_property):
                 "missing_usage_items": usage["missing_usage_items"],
                 "estimated_usd": row["estimated_usd"],
                 "usage_priced_completely": row["usage_priced_completely"],
+                "checkpoint_revision": checkpoint.revision,
+                "checkpoint_identities": len(checkpoint.identities),
+                "checkpoint_active_attempts": len(checkpoint.active_attempts),
+                "checkpoint_unknown_charges": checkpoint.unknown_charges,
+                "checkpoint_estimated_usd": checkpoint.estimated_usd,
             }
         ),
     )
@@ -117,20 +130,46 @@ async def test_synthetic_speech_transcription(live_settings, record_property):
 @pytest.mark.live_provider
 @pytest.mark.features("C5")
 @pytest.mark.scenario("PROVIDER-ELEVEN-CHOSEN-VOICE")
-async def test_chosen_eleven_voice(live_settings):
-    voice = ElevenSpeech(live_settings, ProviderGate(live_settings))
-    validation = await voice.validate()
-    if not validation["valid"]:
-        pytest.skip("Chosen ElevenLabs voice prerequisite: " + validation["reason"])
-    chunks = [chunk async for chunk in voice.stream("Iago voice connection test.")]
-    assert sum(map(len, chunks)) > 24000
-    assert sum(map(len, chunks)) % 2 == 0
+async def test_chosen_eleven_voice(live_settings, tmp_path, record_property, live_gate):
+    gate = live_gate
+    storage = gate.persistence
+    voice = ElevenSpeech(live_settings, gate)
+    try:
+        validation = await voice.validate()
+        if not validation["valid"]:
+            pytest.skip("Chosen ElevenLabs voice prerequisite: " + validation["reason"])
+        chunks = [chunk async for chunk in voice.stream("Iago voice connection test.")]
+        assert sum(map(len, chunks)) > 24000
+        assert sum(map(len, chunks)) % 2 == 0
+    finally:
+        await storage.close()
+    checkpoint = await asyncio.to_thread(storage.load)
+    assert not checkpoint.active_attempts
+    assert set(checkpoint.identities) == gate.seen_usage
+    assert checkpoint.unknown_charges == gate.unknown_charges
+    assert checkpoint.estimated_usd == gate.estimated_usd
+    assert len(gate.usage) == 2  # Validation PCM probe and the requested test phrase.
+    assert all(r["provider"] == "elevenlabs_tts" and r["usage"]["dispatched"] for r in gate.usage)
+    record_property("sample_count", 1)
+    record_property(
+        "measurements",
+        {
+            "fixture": "synthetic voice probe and phrase; no physical playback",
+            "pcm_bytes": sum(map(len, chunks)),
+            "synthesis_attempts": len(gate.usage),
+            "checkpoint_revision": checkpoint.revision,
+            "checkpoint_identities": len(checkpoint.identities),
+            "checkpoint_active_attempts": len(checkpoint.active_attempts),
+            "checkpoint_unknown_charges": checkpoint.unknown_charges,
+            "checkpoint_estimated_usd": checkpoint.estimated_usd,
+        },
+    )
 
 
 @pytest.mark.live_provider
 @pytest.mark.features("C4", "E1")
 @pytest.mark.scenario("E1-ASTRA-WORKFLOW-READ-DRAFT")
-async def test_astra_installed_workflow_reads_and_drafts(live_settings, tmp_path, record_property):
+async def test_astra_installed_workflow_reads_and_drafts(live_settings, tmp_path, record_property, live_gate):
     """Actual Astra/controller/MCP, fake calendar and synthetic PCM sink; no physical claim."""
     core_path = Path("reachy_brain/core/conversation.py")
     before = hashlib.sha256(await asyncio.to_thread(core_path.read_bytes)).hexdigest()
@@ -158,7 +197,7 @@ async def test_astra_installed_workflow_reads_and_drafts(live_settings, tmp_path
             yield bytes(960)
 
     executor = ObservedExecutor(registry, policy, journal)
-    gate = ProviderGate(live_settings)
+    gate = live_gate
     brain = AstraBrain(live_settings, gate)
     messages = []
 
@@ -309,6 +348,7 @@ async def test_astra_controlled_fake_calendar_writes(
     authorization,
     calendar_transport,
     live_calendar_installation,
+    live_gate,
 ):
     """Real Astra/controller/stdio writes; fake accounts, synthetic approval UI and PCM sink."""
     config = live_calendar_installation
@@ -318,7 +358,7 @@ async def test_astra_controlled_fake_calendar_writes(
     registry, policy = ToolRegistry(), ActionPolicy()
     journal = OperationStore(tmp_path / "operations.sqlite")
     executor = ToolExecutor(registry, policy, journal)
-    gate = ProviderGate(live_settings)
+    gate = live_gate
     brain = AstraBrain(live_settings, gate)
     messages, proposals, titles = [], [], []
     expected_title = ""

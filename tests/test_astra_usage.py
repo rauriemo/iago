@@ -38,7 +38,10 @@ async def test_astra_terminal_usage_and_interrupted_identity(monkeypatch, outcom
 
         async def messages(self):
             yield SimpleNamespace(
-                type="response.created", response=SimpleNamespace(id="response-test", usage=None)
+                type="response.created",
+                response=SimpleNamespace(
+                    id="response-test", usage=None, model="provider-reported-synthetic"
+                ),
             )
             yield SimpleNamespace(type="response.output_text.delta", delta="Private synthetic text")
             if outcome == "transport":
@@ -71,7 +74,13 @@ async def test_astra_terminal_usage_and_interrupted_identity(monkeypatch, outcom
     gate = ProviderGate(settings)
     brain = AstraBrain(settings, gate)
     stream = brain.stream([{"role": "user", "content": "Private synthetic prompt"}], [])
-    assert (await anext(stream))["type"] == "text"
+    first = await anext(stream)
+    assert first["type"] == "text"
+    assert first["provenance"] == {
+        "response_id": "response-test",
+        "requested_model": "gpt-6-astra",
+        "reported_model": "provider-reported-synthetic",
+    }
     active = gate.active_usage()
     assert len(active) == 1 and active[0]["provider"] == "astra"
     assert active[0]["counters"]["received_text_characters"] == len("Private synthetic text")

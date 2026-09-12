@@ -68,5 +68,44 @@ async def test_preview_deduplicates_and_preserves_unknown_timing():
     session.source = source
     await session.previews()
     assert len(calls) == 3 and len(delivered) == 1
-    assert all(item[-2] == 1.0 and item[-1] is True for item in delivered)
+    assert all(item[4] == 1.0 and item[5] is True and item[6] == 1 for item in delivered)
     assert all(item[0] is source and item[1] == 1 for item in delivered)
+
+
+@pytest.mark.features("V5", "D2", "D3", "P10")
+@pytest.mark.scenario("ROBOT-PREVIEW-SEQUENCE-GENERATION")
+async def test_preview_rejects_regression_and_resets_with_source_generation():
+    from types import SimpleNamespace
+
+    from reachy_brain.robot.session import RobotSession
+
+    source = SimpleNamespace(id="robot", generation=0, enabled=True)
+    core = SimpleNamespace(mode="aware")
+    delivered = []
+    calls = 0
+
+    async def snapshot(*, preview=False):
+        nonlocal calls
+        calls += 1
+        if calls == 4:
+            source.generation = 1
+        if calls == 6:
+            core.mode = "idle"
+        return b"synthetic", {
+            "sequence": [3, 2, 3, 1, 1, 2][calls - 1],
+            "retrieved": {"time": 10, "stale": False, "uncertainty": 0.02},
+        }
+
+    async def receive(*args):
+        delivered.append(args)
+
+    session = SimpleNamespace(
+        core=core,
+        source=source,
+        edge=SimpleNamespace(snapshot=snapshot),
+        settings=SimpleNamespace(robot_camera_timing_uncertainty=None),
+        on_preview=receive,
+        notify=receive,
+    )
+    await RobotSession.previews(session)
+    assert [(row[1], row[-1]) for row in delivered] == [(0, 3), (1, 1)]

@@ -38,12 +38,12 @@ async def test_held_note_save_preserves_loop_progress_and_duplicate_protection(
     original = notes.save
     calls = []
 
-    def held(text):
+    def held(text, *, operation_id=None):
         calls.append(text)
         loop.call_soon_threadsafe(entered.set)
         assert release.wait(5), "note save blocked event-loop progress"
         try:
-            return original(text)
+            return original(text, operation_id=operation_id)
         finally:
             loop.call_soon_threadsafe(finished.set)
 
@@ -78,6 +78,9 @@ async def test_held_note_save_preserves_loop_progress_and_duplicate_protection(
         duplicate = await executor.execute(key, payload, context)
         assert duplicate["duplicate"] and duplicate["status"] == expected
         assert len(calls) == 1
+        if expected == "uncertain":
+            pending = await executor.reconcile(context.operation_id, CallContext("synthetic", 1))
+            assert pending["status"] == "uncertain" and notes.count() == 0
         release.set()
         await asyncio.wait_for(finished.wait(), 2)
         assert notes.count() == 1
@@ -97,6 +100,9 @@ async def test_held_note_save_preserves_loop_progress_and_duplicate_protection(
         duplicate = await resumed.execute(key, payload, context)
         assert duplicate["duplicate"] and duplicate["status"] == expected
         assert len(calls) == 1 and notes.count() == 1
+        resolved = await resumed.reconcile(context.operation_id, CallContext("synthetic", 2))
+        assert resolved["status"] == "succeeded"
+        assert resolved["provider_ref"] == notes.list()[0]["id"]
     finally:
         await resumed.close()
         reopened.close()

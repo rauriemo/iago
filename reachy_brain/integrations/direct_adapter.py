@@ -31,7 +31,14 @@ class DirectModule:
         self.adapter = creator(
             config.get("options", {}), config["module"], config["account"], **arguments
         )
-        await self.adapter.__aenter__()
+        try:
+            await self.adapter.__aenter__()
+        except BaseException:
+            # Failed context entry is not registered in the runtime's exit stack.
+            # The adapter owns partial resource cleanup; the host owns credentials.
+            if self.credentials:
+                await self.credentials.disconnect(config["account"])
+            raise
         return self
 
     async def __aexit__(self, *args):
@@ -43,8 +50,7 @@ class DirectModule:
 
     async def disconnect(self):
         if self.credentials:
-            await self.credentials.disconnect(self.config["account"])
-            return "local_credentials_cleared_remote_revocation_not_configured"
+            return await self.credentials.disconnect_status(self.config["account"])
         return "no_credential_provider"
 
     async def register(self, registry, policy):

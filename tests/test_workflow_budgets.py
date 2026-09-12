@@ -38,7 +38,7 @@ from reachy_brain.vision.store import VisualStore
     ],
 )
 async def test_workflows_do_not_expand_retrieval_bounds(
-    monkeypatch, modules, advance, expected, limited
+    monkeypatch, modules, advance, expected, limited, retrieval_seconds=10
 ):
     now = [0.0]
     monkeypatch.setattr(
@@ -101,12 +101,35 @@ async def test_workflows_do_not_expand_retrieval_bounds(
 
     executor = ToolExecutor(registry, policy, None)
     brain = Brain()
-    core = Conversation(Settings(_env_file=None), brain, {}, executor, VisualStore(), send)
+    core = Conversation(
+        Settings(_env_file=None, retrieval_deadline_seconds=retrieval_seconds),
+        brain,
+        {},
+        executor,
+        VisualStore(),
+        send,
+    )
     core.mode = "conversation"
     try:
         await core._answer(0, Speech())
         assert dispatched == expected
+        measured = core.retrieval_timings.snapshot()["samples"]
+        if any(module in {"visual", "documents"} for module in modules):
+            assert len(measured) == 1
+            assert measured[0]["limit_seconds"] == retrieval_seconds
+            assert measured[0]["outcome"] == ("error" if limited else "ok")
+            last_retrieval_round = max(
+                i + 1 for i, module in enumerate(modules) if module in {"visual", "documents"}
+            )
+            assert measured[0]["seconds"] == advance * last_retrieval_round
+        else:
+            assert measured == []
         assert sum(o["status"] == "retrieval_limit" for o in outputs) == limited
+        for output in outputs:
+            if output["status"] == "retrieval_limit":
+                assert f"{retrieval_seconds:g}-second limit" in output["message"]
+                assert "missing evidence" in output["message"]
+                assert "narrowing" in output["message"]
         assert brain.calls <= 8
         if len(modules) > 7 or advance == 31:
             assert any("work limit" in text for text in spoken)
@@ -199,3 +222,33 @@ async def test_approval_time_cannot_extend_retrieval(monkeypatch, module):
         assert not executor.pending and not core.confirmations
     finally:
         await executor.close()
+
+
+@pytest.mark.features("V4", "V6", "K1", "E1")
+@pytest.mark.scenario("CONFIGURED-RETRIEVAL-DEADLINE")
+@pytest.mark.parametrize(
+    "seconds,modules,advance,expected,limited",
+    [
+        (4, ["visual", "visual"], 3, ["visual"], 1),
+        (12, ["visual", "documents"], 5, ["visual", "documents"], 0),
+        (5, ["visual"], 5, [], 1),
+        (1, ["calendar", "calendar"], 3, ["calendar", "calendar"], 0),
+    ],
+)
+async def test_configured_retrieval_time_preserves_workflow_isolation(
+    monkeypatch, seconds, modules, advance, expected, limited
+):
+    await test_workflows_do_not_expand_retrieval_bounds(
+        monkeypatch, modules, advance, expected, limited, retrieval_seconds=seconds
+    )
+
+
+@pytest.mark.features("V4", "D5")
+@pytest.mark.scenario("RETRIEVAL-DEADLINE-CONFIG-BOUNDS")
+def test_retrieval_deadline_defaults_and_bounds():
+    from pydantic import ValidationError
+
+    assert Settings(_env_file=None).retrieval_deadline_seconds == 10
+    for value in (0, -1, 31, float("nan"), float("inf")):
+        with pytest.raises(ValidationError):
+            Settings(_env_file=None, retrieval_deadline_seconds=value)

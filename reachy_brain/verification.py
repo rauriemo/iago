@@ -47,10 +47,19 @@ class EvidenceRedactor:
     def data(self, value):
         if isinstance(value, str):
             return self(value)
-        if isinstance(value, list):
+        if isinstance(value, (list, tuple)):
             return [self.data(item) for item in value]
         if isinstance(value, dict):
-            return {key: self.data(item) for key, item in value.items()}
+            result = {}
+            for key, item in value.items():
+                base = self(key)
+                safe_key = base
+                suffix = 2
+                while safe_key in result:
+                    safe_key = f"{base} [{suffix}]"
+                    suffix += 1
+                result[safe_key] = self.data(item)
+            return result
         return value
 
 
@@ -67,8 +76,8 @@ class EvidencePlugin:
         self.items = {}
         self.redact = EvidenceRedactor()
 
-    def pytest_collection_modifyitems(self, items):
-        self.items = {item.nodeid: item for item in items}
+    def pytest_collection_finish(self, session):
+        self.items = {item.nodeid: item for item in session.items}
 
     def pytest_runtest_logreport(self, report):
         if report.when != "call" and not (report.failed or report.skipped):
@@ -141,6 +150,11 @@ def main(argv=None):
     )
     parser.add_argument("--output", type=Path, default=Path("local-data/evidence"))
     parser.add_argument("--select", help="Optional pytest -k subset; never a full suite pass")
+    parser.add_argument(
+        "--fail-fast",
+        action="store_true",
+        help="Stop after the first failed check; retain failure and unexecuted-check evidence",
+    )
     invocation = list(sys.argv[1:] if argv is None else argv)
     args = parser.parse_args(invocation)
     args.output.mkdir(parents=True, exist_ok=True)
@@ -152,21 +166,28 @@ def main(argv=None):
         "robot": "robot",
     }[args.suite]
     command = ["tests", "-q", "-m", marker]
+    if args.fail_fast:
+        command.append("-x")
     if args.select:
         command += ["-k", args.select]
     output = BoundedOutput()
     with redirect_stdout(output), redirect_stderr(output):
         result = int(pytest.main(command, plugins=[plugin]))
     records = plugin.redact.data(list(plugin.results.values()))
+    not_run = [node for node in plugin.items if node not in plugin.results]
     status = (
         "pass"
-        if result == 0 and records and all(r["status"] == "pass" for r in records)
+        if result == 0 and records and not not_run and all(r["status"] == "pass" for r in records)
         else "fail"
     )
-    if result == 5 or (
-        records
-        and all(r["status"] in {"blocked", "pass"} for r in records)
-        and any(r["status"] == "blocked" for r in records)
+    if (
+        (result == 0 and not_run and all(r["status"] != "fail" for r in records))
+        or result == 5
+        or (
+            records
+            and all(r["status"] in {"blocked", "pass"} for r in records)
+            and any(r["status"] == "blocked" for r in records)
+        )
     ):
         status = "blocked"
     if not records:
@@ -197,6 +218,8 @@ def main(argv=None):
         "models": {"brain": "gpt-6-astra", "access": "not established by offline tests"},
         "devices": "Test-specific; offline devices are fake/virtual",
         "results": records,
+        "selected_test_count": len(plugin.items),
+        "not_run_tests": not_run,
         "acceptance_inventory": acceptance_inventory(),
         "limitation": "Only listed scenarios evaluated; consult FEATURES.json for remaining coverage.",
     }
@@ -212,6 +235,7 @@ def main(argv=None):
                     f"{record['scenario']} [{phase['phase']}: {phase['status']}]\n{phase['traceback']}"
                 )
     trace_path = args.output / f"{name}-failures.txt"
+    failures.extend("Not run: " + plugin.redact(node) for node in not_run)
     trace_path.write_text(
         "\n\n".join(failures) if failures else "No failing or blocked phases.\n", encoding="utf-8"
     )
@@ -227,11 +251,15 @@ def main(argv=None):
         "",
         f"Command: `{report['command']}`",
         f"Failure/blocked details: [{trace_path.name}]({trace_path.name}) (redacted, bounded per phase).",
+        f"Selected checks: {len(plugin.items)}. Not run: {len(not_run)}. Unexecuted checks never count as passes.",
         "",
         "| Scenario | Features | Status |",
         "| --- | --- | --- |",
     ]
     lines += [f"| {r['scenario']} | {', '.join(r['features'])} | {r['status']} |" for r in records]
+    if not_run:
+        lines += ["", "## Unexecuted selected checks", ""]
+        lines += ["- " + node for node in not_run]
     inventory = report["acceptance_inventory"]
     lines += [
         "",

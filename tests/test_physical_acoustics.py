@@ -29,7 +29,7 @@ def test_independently_recorded_pc_cutoff_trials(record_property):
     trials = [CutoffTrial.model_validate(t) for t in manifest["trials"]]
     assert 1 <= len(trials) <= 1000
     assert len({t.id for t in trials}) == len(trials), "duplicate trial IDs"
-    assert len({(t.sha256, t.event_sample, t.channel) for t in trials}) == len(trials), (
+    assert len({(t.sha256, t.event_sample) for t in trials}) == len(trials), (
         "duplicate recorded events"
     )
     assert sum(t.action == "spoken" for t in trials) >= 20, "at least 20 spoken interruptions"

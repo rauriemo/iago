@@ -75,3 +75,45 @@ def test_enabling_incomplete_disabled_module_preserves_configuration(tmp_path):
         runtime.save_module_enabled("synthetic", "local", True)
     assert path.read_bytes() == original
     assert not list(tmp_path.glob(".integration-*"))
+
+
+@pytest.mark.features("E1", "D5")
+@pytest.mark.scenario("WORKFLOW-INSTALLATION-VALIDATE-BEFORE-START")
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("trusted", "false"),
+        ("trusted", 1),
+        ("enabled", "false"),
+        ("enabled", 1),
+        ("path", None),
+        ("path", " "),
+        ("path", 12),
+    ],
+)
+async def test_invalid_workflow_configuration_prevents_adapter_startup(
+    tmp_path, monkeypatch, field, value
+):
+    module = {
+        "module": "synthetic",
+        "account": "local",
+        "enabled": True,
+        "transport": "python",
+        "factory": "synthetic:unused",
+    }
+    skill = {"path": "unused-workflow-path", "trusted": True, "enabled": True, field: value}
+    path = tmp_path / "installation.json"
+    original = json.dumps({"modules": [module], "skills": [skill]}).encode()
+    path.write_bytes(original)
+    constructed = []
+
+    def forbidden(config):
+        constructed.append(config)
+        raise AssertionError("invalid workflow configuration reached adapter construction")
+
+    monkeypatch.setattr("reachy_brain.integrations.runtime.DirectModule", forbidden)
+    with pytest.raises(ToolError, match="^invalid_integration_configuration$"):
+        async with IntegrationRuntime(ToolRegistry(), ActionPolicy(), path):
+            pass
+    assert not constructed
+    assert path.read_bytes() == original

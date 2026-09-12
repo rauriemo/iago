@@ -24,6 +24,16 @@ class Installation(BaseModel):
     modules: list[dict] = Field(default_factory=list, max_length=20)
     skills: list[dict] = Field(default_factory=list, max_length=50)
 
+    @field_validator("skills")
+    @classmethod
+    def validate_skills(cls, skills):
+        for installation in skills:
+            try:
+                SkillCatalog.validate_installation(installation)
+            except ToolError:
+                raise ValueError("invalid_skill_installation") from None
+        return skills
+
     @field_validator("modules")
     @classmethod
     def validate_modules(cls, modules):
@@ -160,7 +170,19 @@ class IntegrationRuntime:
     async def async_status(self):
         self.refresh_capabilities()
         context = CallContext("status", 0, capabilities=frozenset(self.capabilities))
-        workflows = await self.workflow_read(context, include_disabled=True)
+        try:
+            workflows = await self.workflow_read(context, include_disabled=True)
+        except ToolError as exc:
+            if str(exc) not in {
+                "invalid_skill_installation",
+                "invalid_skill_manifest",
+                "invalid_skill_resource",
+                "skill_collision",
+            }:
+                raise
+            result = self.status(workflows=[])
+            result["diagnostics"].append({"module": "workflows", "status": str(exc)})
+            return result
         return self.status(workflows=workflows)
 
     def register_workflows(self):

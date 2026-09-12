@@ -74,6 +74,15 @@ class ProviderGate:
         if budget != "unlimited" and (budget <= 0 or self.estimated_usd >= budget):
             raise ProviderError(provider, "development_budget")
 
+    async def checkpoint(self, provider):
+        if self.persistence:
+            try:
+                async with asyncio.timeout(10):
+                    await self.persistence.flush()
+            except (RuntimeError, TimeoutError):
+                raise ProviderError(provider, "usage_persistence_unavailable") from None
+        self.require(provider)
+
     def begin_active(self, provider, model, counters):
         if len(self.active) >= 32:
             raise ProviderError(provider, "active_usage_capacity")
@@ -84,10 +93,13 @@ class ProviderGate:
             "started": time.monotonic(),
             "counters": counters,
         }
+        if self.persistence:
+            self.persistence.changed()
         return identity
 
     def end_active(self, identity):
-        self.active.pop(identity, None)
+        if self.active.pop(identity, None) is not None and self.persistence:
+            self.persistence.changed()
 
     def active_usage(self):
         # Only numeric operational counters cross the diagnostic boundary. Never
@@ -110,7 +122,11 @@ class ProviderGate:
         ]
 
     def limit(self, provider):
+        if provider in self.limited:
+            return
         self.limited.add(provider)
+        if self.persistence:
+            self.persistence.changed()
 
     def record(self, provider, request_id, usage, *, model=None, service_tier="default"):
         identity = (provider, request_id)
@@ -118,8 +134,11 @@ class ProviderGate:
             return
         if request_id and len(self.seen_usage) < 10000:
             self.seen_usage.add(identity)
-        estimate = self.rates.estimate(model, usage, service_tier=service_tier)
-        fully_priced = estimate is not None and usage.get("billing_usage_complete") is not False
+        undispatched = usage.get("dispatched") is False
+        estimate = 0 if undispatched else self.rates.estimate(model, usage, service_tier=service_tier)
+        fully_priced = undispatched or (
+            estimate is not None and usage.get("billing_usage_complete") is not False
+        )
         if not fully_priced:
             self.unknown_charges += 1
         if estimate is not None:
@@ -141,12 +160,13 @@ class ProviderGate:
             self.persistence.changed()
 
     @contextlib.contextmanager
-    def speech_attempt(self, provider, model, characters):
+    def speech_attempt(self, provider, model, characters, *, dispatched=True):
         attempt = {
             "input_characters": characters,
             "received_pcm_bytes": 0,
             "request_id": "",
             "status": "completed",
+            "dispatched": dispatched,
         }
         started = time.monotonic()
         active_id = self.begin_active(provider, model, attempt)
@@ -165,7 +185,7 @@ class ProviderGate:
             attempt["request_id_origin"] = "provider" if request_id else "local_attempt"
             attempt["received_audio_seconds"] = attempt["received_pcm_bytes"] / 48000
             attempt["elapsed_seconds"] = time.monotonic() - started
-            attempt["billing_usage_known"] = False
+            attempt["billing_usage_known"] = not attempt["dispatched"]
             attempt["attempt_id"] = active_id
             self.record(provider, request_id or active_id, attempt, model=model)
 
@@ -185,10 +205,12 @@ class AstraBrain:
             raise ProviderError("openai", "missing_key")
         started = time.monotonic()
         request_id = ""
+        provenance = {}
         service_tier = "default"
         usage = {}
         status = "failed"
         recorded = False
+        dispatched = False
         active_counters = {"received_text_characters": 0}
         active_id = self.gate.begin_active("astra", self.settings.brain_model, active_counters)
 
@@ -207,6 +229,7 @@ class AstraBrain:
                     "request_id_origin": "provider" if request_id else "local_attempt",
                     "usage_returned": bool(usage),
                     "attempt_id": active_id,
+                    "dispatched": dispatched,
                 },
                 model=self.settings.brain_model,
                 service_tier=service_tier,
@@ -214,6 +237,8 @@ class AstraBrain:
             recorded = True
 
         try:
+            await self.gate.checkpoint("openai")
+            dispatched = True
             stream = await self.client.responses.create(
                 model=self.settings.brain_model,
                 reasoning={"effort": self.settings.brain_reasoning_effort},
@@ -236,21 +261,29 @@ class AstraBrain:
                         "response.incomplete",
                     }:
                         request_id = event.response.id
+                        provenance = {
+                            "response_id": request_id,
+                            "requested_model": self.settings.brain_model,
+                        }
+                        reported = getattr(event.response, "model", None)
+                        if isinstance(reported, str) and 0 < len(reported) <= 128:
+                            provenance["reported_model"] = reported
                         service_tier = getattr(event.response, "service_tier", None) or "default"
                         if event.response.usage:
                             usage = event.response.usage.model_dump()
                     if event.type == "response.output_text.delta":
                         active_counters["received_text_characters"] += len(event.delta)
-                        yield {"type": "text", "text": event.delta}
+                        yield {"type": "text", "text": event.delta, "provenance": dict(provenance)}
                     elif event.type == "response.output_item.done":
                         yield {
                             "type": "item",
                             "item": event.item.model_dump(mode="json", exclude_none=True),
+                            "provenance": dict(provenance),
                         }
                     elif event.type == "response.completed":
                         status = "completed"
                         record_attempt()
-                        yield {"type": "done", "usage": usage}
+                        yield {"type": "done", "usage": usage, "provenance": dict(provenance)}
                         return
                     elif event.type in {"response.failed", "response.incomplete", "error"}:
                         status = "incomplete" if event.type == "response.incomplete" else "failed"
@@ -286,9 +319,11 @@ class OpenAISpeech:
     async def stream(self, text: str) -> AsyncIterator[bytes]:
         self.gate.require("openai")
         with self.gate.speech_attempt(
-            "openai_tts", self.settings.openai_tts_model, len(text)
+            "openai_tts", self.settings.openai_tts_model, len(text), dispatched=False
         ) as attempt:
             try:
+                await self.gate.checkpoint("openai")
+                attempt["dispatched"] = True
                 async with self.client.audio.speech.with_streaming_response.create(
                     model=self.settings.openai_tts_model,
                     voice=self.settings.openai_tts_voice,
@@ -407,8 +442,10 @@ class ElevenSpeech:
         model = quote(self.settings.elevenlabs_model_id, safe="")
         uri = f"wss://api.elevenlabs.io/v1/text-to-speech/{voice}/stream-input?model_id={model}&output_format=pcm_24000"
         with self.gate.speech_attempt(
-            "elevenlabs_tts", self.settings.elevenlabs_model_id, len(text)
+            "elevenlabs_tts", self.settings.elevenlabs_model_id, len(text), dispatched=False
         ) as attempt:
+            await self.gate.checkpoint("elevenlabs")
+            attempt["dispatched"] = True
             async with asyncio.timeout(20):
                 async with connect(uri, max_size=2**20, max_queue=4, open_timeout=10) as ws:
                     await ws.send(
@@ -457,8 +494,10 @@ class Transcription:
         if self.accounting is not None:
             raise ProviderError("openai", "transcription_already_started")
         self.gate.require("openai")
-        self.accounting = RecognitionUsage(self.gate, self.settings.stt_model)
+        self.accounting = RecognitionUsage(self.gate, self.settings.stt_model, dispatched=False)
         try:
+            await self.gate.checkpoint("openai")
+            self.accounting.dispatched = True
             await self._start_transport()
         except BaseException as exc:
             self.accounting.status = (

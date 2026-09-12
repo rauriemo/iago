@@ -58,7 +58,7 @@ import importlib.util,json,reachy_brain
 from pathlib import Path
 from reachy_brain.providers.costs import RateTable
 print(json.dumps({"module":str(Path(reachy_brain.__file__).resolve()),
-"optional":{name:importlib.util.find_spec(name) is not None for name in ["reachy_mini","mediapipe","pytest","gi"]},
+"optional":{name:importlib.util.find_spec(name) is not None for name in ["reachy_mini","mediapipe","pytest","gi","aiortc","av"]},
 "rates_date":str(RateTable.load().date)}))
 """,
         cwd=tmp_path,
@@ -97,7 +97,7 @@ print(json.dumps({"module":str(Path(reachy_brain.__file__).resolve()),
                 assert time.monotonic() < deadline, "Installed application did not become ready"
                 time.sleep(0.05)
         assert "Iago" in page
-        for asset in ("app.js", "audio-worklet.js"):
+        for asset in ("app.js", "history.js", "evidence.js", "audio-worklet.js"):
             with opener.open(f"http://127.0.0.1:{port}/static/{asset}", timeout=2) as response:
                 assert response.status == 200 and len(response.read()) > 100
         with pytest.raises(urllib.error.HTTPError) as denial:
@@ -142,6 +142,47 @@ print(json.dumps({"mediapipe":mediapipe.__version__,"app_created":bool(app),
         )
     )
     assert vision["app_created"] and not vision["robot_installed"] and not vision["test_packages"]
+    camera_requirements = artifacts / "requirements-robot-camera.txt"
+    run(
+        uv,
+        "export",
+        "--locked",
+        "--no-dev",
+        "--no-emit-project",
+        "--extra",
+        "robot-camera",
+        "--output-file",
+        camera_requirements,
+    )
+    run(uv, "pip", "sync", "--python", python, "--require-hashes", camera_requirements)
+    run(uv, "pip", "install", "--python", python, "--no-deps", wheels[0])
+    camera = json.loads(
+        run(
+            python,
+            "-I",
+            "-c",
+            """
+import asyncio, importlib.util, json, sys
+from reachy_brain.robot.video_consumer import create_video_consumer
+async def check():
+    consumer = create_video_consumer('synthetic-unconnected-token', 'synthetic-peer')
+    result = {
+        'consumer_constructed': consumer._target_peer_id == 'synthetic-peer',
+        'network_not_started': consumer._task is None and consumer._pc is None,
+        'outbound_audio_absent': consumer._out_track is None,
+        'local_media_stack_installed': importlib.util.find_spec('gi') is not None,
+        'local_media_stack_loaded': 'gi' in sys.modules,
+        'test_packages': importlib.util.find_spec('pytest') is not None,
+    }
+    await consumer.stop()
+    print(json.dumps(result))
+asyncio.run(check())
+""",
+            cwd=tmp_path,
+        )
+    )
+    assert camera["consumer_constructed"] and camera["network_not_started"]
+    assert camera["outbound_audio_absent"] and not camera["test_packages"]
     record_property("sample_count", 1)
     record_property(
         "expected",
@@ -159,6 +200,10 @@ print(json.dumps({"mediapipe":mediapipe.__version__,"app_created":bool(app),
                     vision_requirements.read_bytes()
                 ).hexdigest(),
                 "vision_extra": vision,
+                "camera_extra": camera,
+                "camera_requirements_sha256": hashlib.sha256(
+                    camera_requirements.read_bytes()
+                ).hexdigest(),
                 "scope": "isolated interpreter on current host; no clean-OS, device, perception or acoustic qualification",
             }
         ),

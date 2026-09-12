@@ -10,13 +10,20 @@ from .temporal import Presence, Wave
 
 
 class PerceptionEvents:
-    def __init__(self):
+    def __init__(self, *, confirmation=0.7, absence=3, rearm=15):
         self.identity = None
-        self.presence = Presence()
+        self.presence = Presence(confirmation=confirmation, absence=absence, rearm=rearm)
         self.waves = {}
         self.objects = {}
         self.track = uuid.uuid4().hex
         self.last = -math.inf
+        self.last_sequence = -1
+
+    def configure_presence(self, *, confirmation, absence, rearm):
+        current = self.presence
+        if (confirmation, absence, rearm) != (current.confirmation, current.absence, current.rearm):
+            # Changing timing retires old candidates; current presence becomes startup.
+            self.presence = Presence(confirmation=confirmation, absence=absence, rearm=rearm)
 
     def update(self, result, source, *, now):
         if (
@@ -33,11 +40,27 @@ class PerceptionEvents:
             return [], None
         identity = (source.id, source.generation)
         if identity != self.identity:
-            self.__init__()
+            self.__init__(
+                confirmation=self.presence.confirmation,
+                absence=self.presence.absence,
+                rearm=self.presence.rearm,
+            )
             self.identity = identity
+        sequence = result.get("sequence")
+        if sequence is None:
+            if self.last_sequence >= 0:
+                return [], None
+        elif (
+            type(sequence) is not int
+            or not 0 <= sequence <= 9007199254740991
+            or sequence <= self.last_sequence
+        ):
+            return [], None
         if at <= self.last:
             return [], None
         self.last = at
+        if sequence is not None:
+            self.last_sequence = sequence
         events = []
 
         def event(kind, confidence, *, duration=0, details=None):
@@ -72,7 +95,7 @@ class PerceptionEvents:
                 event(
                     transition,
                     max((p["confidence"] for p in people), default=1),
-                    duration=0.7 if people else 3,
+                    duration=self.presence.confirmation if people else self.presence.absence,
                 )
             )
             if not people:
