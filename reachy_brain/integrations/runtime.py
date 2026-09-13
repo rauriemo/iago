@@ -3,6 +3,7 @@
 import asyncio
 import copy
 import json
+import math
 import os
 import re
 import tempfile
@@ -39,6 +40,13 @@ class Installation(BaseModel):
     def validate_modules(cls, modules):
         identities = set()
         for module in modules:
+            timeout = module.get("timeout", 10)
+            if (
+                type(timeout) not in (int, float)
+                or not math.isfinite(timeout)
+                or not 0 < timeout <= 60
+            ):
+                raise ValueError("invalid_module_timeout")
             if type(module.get("enabled", False)) is not bool:
                 raise ValueError("module_enabled_must_be_boolean")
             identity = tuple(module.get(key) for key in ("module", "account"))
@@ -103,13 +111,17 @@ class IntegrationRuntime:
                         )
                         continue
                     adapter = DirectModule if config.get("transport") == "python" else MCPModule
-                    module = await self.stack.enter_async_context(adapter(config))
-                    if isinstance(module, MCPModule):
-                        await module.register(
-                            self.registry, self.policy, defer_identity=self.defer_identity
-                        )
-                    else:
-                        await module.register(self.registry, self.policy)
+                    try:
+                        async with asyncio.timeout(config.get("timeout", 10)):
+                            module = await self.stack.enter_async_context(adapter(config))
+                            if isinstance(module, MCPModule):
+                                await module.register(
+                                    self.registry, self.policy, defer_identity=self.defer_identity
+                                )
+                            else:
+                                await module.register(self.registry, self.policy)
+                    except TimeoutError:
+                        raise ToolError("integration_startup_timeout") from None
                     self.modules.append(module)
                     # These are trusted host configuration declarations, never server annotations.
                     self.capabilities.update(config.get("capabilities", []))

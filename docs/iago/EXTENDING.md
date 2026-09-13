@@ -175,3 +175,6 @@ Installation configuration validates workflow trusted/enabled flags as actual bo
 
 
 Direct adapter startup failures: implement __aenter__ so any partial adapter resources are released before it raises or propagates cancellation. Python does not call __aexit__ when entry fails. Iago separately invalidates its host credential provider on failed entry; no cached host token remains usable through that provider. This cannot erase token copies retained by trusted adapter code or promise remote revocation without a provider callback.
+
+
+Integration startup deadline review: module entry/discovery previously had no host deadline, so a cooperative stalled adapter could leave startup pending despite tool-call timeouts. Installation now validates timeout as a finite non-boolean number greater than zero and at most 60 seconds, default 10, before any module construction. Entry and registration/identity discovery share that per-module deadline. Expiry reports integration_startup_timeout; the existing exit stack releases successfully entered adapters and failed entry retains the adapter's own partial-cleanup responsibility. Cancellation cannot preempt synchronous blocking or cancellation-suppressing trusted Python code; this is not a hard process-isolation or shutdown deadline guarantee.

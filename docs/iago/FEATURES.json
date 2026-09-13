@@ -182,7 +182,8 @@
             "local-data/evidence/stage-extraction-upgrade-full-regression/offline.json",
             "local-data/evidence/stage-workload-capture-reviewed-regression/offline.json",
             "local-data/evidence/stage-workload-entrypoint-full-regression/offline.json",
-            "local-data/evidence/stage-k1-pc-full-regression/offline.json"
+            "local-data/evidence/stage-k1-pc-full-regression/offline.json",
+            "local-data/evidence/stage-integration-startup-full-regression/offline.json"
           ],
           "blocker": null
         },
@@ -220,7 +221,8 @@
       "notes": [
         "Current harness coverage gaps and remaining independent work are recorded in docs/iago/VALIDATION_GAPS.md; fixture/hardware availability alone does not establish complete acceptance.",
         "Full stage-workload-entrypoint-full-regression: 1398 passed, 2 required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 6210224df277 retained with 128 matching packaged source files. No whole-feature or physical validation promotion.",
-        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion."
+        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion.",
+        "Full stage-integration-startup-full-regression: 1424 passed, two required real datasets blocked, zero failures/unexecuted. Tested wheel 24c17bcc8de6 retained, 129 matching packaged source files. No whole-feature or physical validation promotion."
       ]
     },
     {
@@ -534,7 +536,8 @@
             "local-data/evidence/stage-extraction-upgrade-full-regression/offline.json",
             "local-data/evidence/stage-workload-capture-reviewed-regression/offline.json",
             "local-data/evidence/stage-workload-entrypoint-full-regression/offline.json",
-            "local-data/evidence/stage-k1-pc-full-regression/offline.json"
+            "local-data/evidence/stage-k1-pc-full-regression/offline.json",
+            "local-data/evidence/stage-integration-startup-full-regression/offline.json"
           ],
           "blocker": null
         },
@@ -582,7 +585,8 @@
         "Local supervisor Stop now attempts motion hold even when audio flush fails; playback stays latched off and both ordinary failures are preserved when both cleanup paths fail. Synthetic device failure tests passed, without physical hold/cutoff qualification. Retained package predates this runtime fix.",
         "Native worker failures set shared shutdown before local Stop and contain secondary cleanup exceptions as coarse type diagnostics. Microphone/motion/playback loops terminate; heartbeat rejects failed runtime and drives existing owner cleanup. Synthetic fault checks pass; hardware recovery remains unqualified.",
         "Full stage-workload-entrypoint-full-regression: 1398 passed, 2 required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 6210224df277 retained with 128 matching packaged source files. No whole-feature or physical validation promotion.",
-        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion."
+        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion.",
+        "Full stage-integration-startup-full-regression: 1424 passed, two required real datasets blocked, zero failures/unexecuted. Tested wheel 24c17bcc8de6 retained, 129 matching packaged source files. No whole-feature or physical validation promotion."
       ]
     },
     {
@@ -646,7 +650,8 @@
             "local-data/evidence/stage-extraction-upgrade-full-regression/offline.json",
             "local-data/evidence/stage-workload-capture-reviewed-regression/offline.json",
             "local-data/evidence/stage-workload-entrypoint-full-regression/offline.json",
-            "local-data/evidence/stage-k1-pc-full-regression/offline.json"
+            "local-data/evidence/stage-k1-pc-full-regression/offline.json",
+            "local-data/evidence/stage-integration-startup-full-regression/offline.json"
           ],
           "blocker": null
         },
@@ -659,7 +664,8 @@
       "notes": [
         "Current harness coverage gaps and remaining independent work are recorded in docs/iago/VALIDATION_GAPS.md; fixture/hardware availability alone does not establish complete acceptance.",
         "Full stage-workload-entrypoint-full-regression: 1398 passed, 2 required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 6210224df277 retained with 128 matching packaged source files. No whole-feature or physical validation promotion.",
-        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion."
+        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion.",
+        "Full stage-integration-startup-full-regression: 1424 passed, two required real datasets blocked, zero failures/unexecuted. Tested wheel 24c17bcc8de6 retained, 129 matching packaged source files. No whole-feature or physical validation promotion."
       ]
     },
     {
@@ -731,7 +737,8 @@
             "local-data/evidence/stage-workload-capture-reviewed-regression/offline.json",
             "local-data/evidence/stage-workload-entrypoint-full-regression/offline.json",
             "local-data/evidence/stage-k1-pc-bundle-reviewed/offline-subset.json",
-            "local-data/evidence/stage-k1-pc-full-regression/offline.json"
+            "local-data/evidence/stage-k1-pc-full-regression/offline.json",
+            "local-data/evidence/stage-integration-startup-full-regression/offline.json"
           ],
           "blocker": null
         },
@@ -772,7 +779,8 @@
         "Actual Astra question-bound yes/no handoff passed for both synthetic thumb classes, including duplicate rejection before provider dispatch. Text-only sink; no camera or acoustic qualification. Whole-feature/tier status remains unchanged pending full review.",
         "Full stage-workload-entrypoint-full-regression: 1398 passed, 2 required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 6210224df277 retained with 128 matching packaged source files. No whole-feature or physical validation promotion.",
         "K1 PC artifact entrypoint implemented; 34 scoped synthetic checks pass, actual prerequisite check blocked. Binds complete query/answer/UI review records and ten spoken queries without promoting physical or whole-feature validation. Latest full regression and wheel predate this module.",
-        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion."
+        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion.",
+        "Full stage-integration-startup-full-regression: 1424 passed, two required real datasets blocked, zero failures/unexecuted. Tested wheel 24c17bcc8de6 retained, 129 matching packaged source files. No whole-feature or physical validation promotion."
       ]
     },
     {
@@ -881,7 +889,8 @@
             "local-data/evidence/stage-extraction-upgrade-full-regression/offline.json",
             "local-data/evidence/stage-workload-capture-reviewed-regression/offline.json",
             "local-data/evidence/stage-workload-entrypoint-full-regression/offline.json",
-            "local-data/evidence/stage-k1-pc-full-regression/offline.json"
+            "local-data/evidence/stage-k1-pc-full-regression/offline.json",
+            "local-data/evidence/stage-integration-startup-full-regression/offline.json"
           ],
           "blocker": null
         },
@@ -916,7 +925,8 @@
         "Current harness coverage gaps and remaining independent work are recorded in docs/iago/VALIDATION_GAPS.md; fixture/hardware availability alone does not establish complete acceptance.",
         "Echo scoring now hashes and measures the same bounded temporary WAV snapshot, preventing original-file mutation after hash verification from changing measured PCM. Snapshot uses up to 512 MiB temporary disk and closes on completion/error. Synthetic race regression only, no physical echo pass.",
         "Full stage-workload-entrypoint-full-regression: 1398 passed, 2 required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 6210224df277 retained with 128 matching packaged source files. No whole-feature or physical validation promotion.",
-        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion."
+        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion.",
+        "Full stage-integration-startup-full-regression: 1424 passed, two required real datasets blocked, zero failures/unexecuted. Tested wheel 24c17bcc8de6 retained, 129 matching packaged source files. No whole-feature or physical validation promotion."
       ]
     },
     {
@@ -1025,7 +1035,8 @@
             "local-data/evidence/stage-extraction-upgrade-full-regression/offline.json",
             "local-data/evidence/stage-workload-capture-reviewed-regression/offline.json",
             "local-data/evidence/stage-workload-entrypoint-full-regression/offline.json",
-            "local-data/evidence/stage-k1-pc-full-regression/offline.json"
+            "local-data/evidence/stage-k1-pc-full-regression/offline.json",
+            "local-data/evidence/stage-integration-startup-full-regression/offline.json"
           ],
           "blocker": null
         },
@@ -1061,7 +1072,8 @@
         "Current harness coverage gaps and remaining independent work are recorded in docs/iago/VALIDATION_GAPS.md; fixture/hardware availability alone does not establish complete acceptance.",
         "Echo scoring now hashes and measures the same bounded temporary WAV snapshot, preventing original-file mutation after hash verification from changing measured PCM. Snapshot uses up to 512 MiB temporary disk and closes on completion/error. Synthetic race regression only, no physical echo pass.",
         "Full stage-workload-entrypoint-full-regression: 1398 passed, 2 required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 6210224df277 retained with 128 matching packaged source files. No whole-feature or physical validation promotion.",
-        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion."
+        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion.",
+        "Full stage-integration-startup-full-regression: 1424 passed, two required real datasets blocked, zero failures/unexecuted. Tested wheel 24c17bcc8de6 retained, 129 matching packaged source files. No whole-feature or physical validation promotion."
       ]
     },
     {
@@ -1126,7 +1138,8 @@
             "local-data/evidence/stage-extraction-upgrade-full-regression/offline.json",
             "local-data/evidence/stage-workload-capture-reviewed-regression/offline.json",
             "local-data/evidence/stage-workload-entrypoint-full-regression/offline.json",
-            "local-data/evidence/stage-k1-pc-full-regression/offline.json"
+            "local-data/evidence/stage-k1-pc-full-regression/offline.json",
+            "local-data/evidence/stage-integration-startup-full-regression/offline.json"
           ],
           "blocker": null
         },
@@ -1148,7 +1161,8 @@
       "notes": [
         "Current harness coverage gaps and remaining independent work are recorded in docs/iago/VALIDATION_GAPS.md; fixture/hardware availability alone does not establish complete acceptance.",
         "Full stage-workload-entrypoint-full-regression: 1398 passed, 2 required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 6210224df277 retained with 128 matching packaged source files. No whole-feature or physical validation promotion.",
-        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion."
+        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion.",
+        "Full stage-integration-startup-full-regression: 1424 passed, two required real datasets blocked, zero failures/unexecuted. Tested wheel 24c17bcc8de6 retained, 129 matching packaged source files. No whole-feature or physical validation promotion."
       ]
     },
     {
@@ -1266,7 +1280,8 @@
             "local-data/evidence/stage-extraction-upgrade-full-regression/offline.json",
             "local-data/evidence/stage-workload-capture-reviewed-regression/offline.json",
             "local-data/evidence/stage-workload-entrypoint-full-regression/offline.json",
-            "local-data/evidence/stage-k1-pc-full-regression/offline.json"
+            "local-data/evidence/stage-k1-pc-full-regression/offline.json",
+            "local-data/evidence/stage-integration-startup-full-regression/offline.json"
           ],
           "blocker": null
         },
@@ -1290,7 +1305,8 @@
         "Current harness coverage gaps and remaining independent work are recorded in docs/iago/VALIDATION_GAPS.md; fixture/hardware availability alone does not establish complete acceptance.",
         "Thumb commit rechecks turn/session/source/mode/speech/enable/question ownership across Stop. History/record submission precedes transcript delivery; delayed delivery cannot resurrect a superseded gesture or launch an answer in a newer epoch. Synthetic controller race checks passed; no physical gesture qualification. Retained wheel predates this fix.",
         "Full stage-workload-entrypoint-full-regression: 1398 passed, 2 required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 6210224df277 retained with 128 matching packaged source files. No whole-feature or physical validation promotion.",
-        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion."
+        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion.",
+        "Full stage-integration-startup-full-regression: 1424 passed, two required real datasets blocked, zero failures/unexecuted. Tested wheel 24c17bcc8de6 retained, 129 matching packaged source files. No whole-feature or physical validation promotion."
       ]
     },
     {
@@ -1439,7 +1455,8 @@
             "local-data/evidence/stage-extraction-upgrade-full-regression/offline.json",
             "local-data/evidence/stage-workload-capture-reviewed-regression/offline.json",
             "local-data/evidence/stage-workload-entrypoint-full-regression/offline.json",
-            "local-data/evidence/stage-k1-pc-full-regression/offline.json"
+            "local-data/evidence/stage-k1-pc-full-regression/offline.json",
+            "local-data/evidence/stage-integration-startup-full-regression/offline.json"
           ],
           "blocker": null
         },
@@ -1452,7 +1469,8 @@
       "notes": [
         "Current harness coverage gaps and remaining independent work are recorded in docs/iago/VALIDATION_GAPS.md; fixture/hardware availability alone does not establish complete acceptance.",
         "Full stage-workload-entrypoint-full-regression: 1398 passed, 2 required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 6210224df277 retained with 128 matching packaged source files. No whole-feature or physical validation promotion.",
-        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion."
+        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion.",
+        "Full stage-integration-startup-full-regression: 1424 passed, two required real datasets blocked, zero failures/unexecuted. Tested wheel 24c17bcc8de6 retained, 129 matching packaged source files. No whole-feature or physical validation promotion."
       ]
     },
     {
@@ -1595,7 +1613,8 @@
             "local-data/evidence/stage-extraction-upgrade-full-regression/offline.json",
             "local-data/evidence/stage-workload-capture-reviewed-regression/offline.json",
             "local-data/evidence/stage-workload-entrypoint-full-regression/offline.json",
-            "local-data/evidence/stage-k1-pc-full-regression/offline.json"
+            "local-data/evidence/stage-k1-pc-full-regression/offline.json",
+            "local-data/evidence/stage-integration-startup-full-regression/offline.json"
           ],
           "blocker": null
         },
@@ -1619,7 +1638,8 @@
         "Official WebRTC camera is now selectable through RobotSession; synthetic lifecycle and app composition checks pass. Actual relay/robot, edge-to-peer correspondence, capture timing and gesture motion alignment remain unqualified.",
         "Bounded HTTP archive and returned detector-execution timing streams added to workload distributions. Successful/error/canceled handling and invalid-value sequence gaps remain separate. Excludes physical capture, robot archive path, dropped/queue time and gesture temporal commit; no physical qualification.",
         "Full stage-workload-entrypoint-full-regression: 1398 passed, 2 required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 6210224df277 retained with 128 matching packaged source files. No whole-feature or physical validation promotion.",
-        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion."
+        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion.",
+        "Full stage-integration-startup-full-regression: 1424 passed, two required real datasets blocked, zero failures/unexecuted. Tested wheel 24c17bcc8de6 retained, 129 matching packaged source files. No whole-feature or physical validation promotion."
       ]
     },
     {
@@ -1734,7 +1754,8 @@
             "local-data/evidence/stage-extraction-upgrade-full-regression/offline.json",
             "local-data/evidence/stage-workload-capture-reviewed-regression/offline.json",
             "local-data/evidence/stage-workload-entrypoint-full-regression/offline.json",
-            "local-data/evidence/stage-k1-pc-full-regression/offline.json"
+            "local-data/evidence/stage-k1-pc-full-regression/offline.json",
+            "local-data/evidence/stage-integration-startup-full-regression/offline.json"
           ],
           "blocker": null
         },
@@ -1769,7 +1790,8 @@
       "notes": [
         "Current harness coverage gaps and remaining independent work are recorded in docs/iago/VALIDATION_GAPS.md; fixture/hardware availability alone does not establish complete acceptance.",
         "Full stage-workload-entrypoint-full-regression: 1398 passed, 2 required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 6210224df277 retained with 128 matching packaged source files. No whole-feature or physical validation promotion.",
-        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion."
+        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion.",
+        "Full stage-integration-startup-full-regression: 1424 passed, two required real datasets blocked, zero failures/unexecuted. Tested wheel 24c17bcc8de6 retained, 129 matching packaged source files. No whole-feature or physical validation promotion."
       ]
     },
     {
@@ -1887,7 +1909,8 @@
             "local-data/evidence/stage-extraction-upgrade-full-regression/offline.json",
             "local-data/evidence/stage-workload-capture-reviewed-regression/offline.json",
             "local-data/evidence/stage-workload-entrypoint-full-regression/offline.json",
-            "local-data/evidence/stage-k1-pc-full-regression/offline.json"
+            "local-data/evidence/stage-k1-pc-full-regression/offline.json",
+            "local-data/evidence/stage-integration-startup-full-regression/offline.json"
           ],
           "blocker": null
         },
@@ -1909,7 +1932,8 @@
         "Current harness coverage gaps and remaining independent work are recorded in docs/iago/VALIDATION_GAPS.md; fixture/hardware availability alone does not establish complete acceptance.",
         "Combined visual/document retrieval now records one owner-scoped sample from enforced budget start through last result/limit, with configured deadline. Calendar-only work produces no retrieval sample. Report fails successful deadline overruns; error/late exhausted requests remain distinct. Actual workload/physical validation not promoted; retained wheel predates this instrumentation.",
         "Full stage-workload-entrypoint-full-regression: 1398 passed, 2 required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 6210224df277 retained with 128 matching packaged source files. No whole-feature or physical validation promotion.",
-        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion."
+        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion.",
+        "Full stage-integration-startup-full-regression: 1424 passed, two required real datasets blocked, zero failures/unexecuted. Tested wheel 24c17bcc8de6 retained, 129 matching packaged source files. No whole-feature or physical validation promotion."
       ]
     },
     {
@@ -2053,7 +2077,8 @@
             "local-data/evidence/stage-extraction-upgrade-full-regression/offline.json",
             "local-data/evidence/stage-workload-capture-reviewed-regression/offline.json",
             "local-data/evidence/stage-workload-entrypoint-full-regression/offline.json",
-            "local-data/evidence/stage-k1-pc-full-regression/offline.json"
+            "local-data/evidence/stage-k1-pc-full-regression/offline.json",
+            "local-data/evidence/stage-integration-startup-full-regression/offline.json"
           ],
           "blocker": null
         },
@@ -2083,7 +2108,8 @@
       "notes": [
         "Current harness coverage gaps and remaining independent work are recorded in docs/iago/VALIDATION_GAPS.md; fixture/hardware availability alone does not establish complete acceptance.",
         "Full stage-workload-entrypoint-full-regression: 1398 passed, 2 required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 6210224df277 retained with 128 matching packaged source files. No whole-feature or physical validation promotion.",
-        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion."
+        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion.",
+        "Full stage-integration-startup-full-regression: 1424 passed, two required real datasets blocked, zero failures/unexecuted. Tested wheel 24c17bcc8de6 retained, 129 matching packaged source files. No whole-feature or physical validation promotion."
       ]
     },
     {
@@ -2224,7 +2250,8 @@
             "local-data/evidence/stage-extraction-upgrade-full-regression/offline.json",
             "local-data/evidence/stage-workload-capture-reviewed-regression/offline.json",
             "local-data/evidence/stage-workload-entrypoint-full-regression/offline.json",
-            "local-data/evidence/stage-k1-pc-full-regression/offline.json"
+            "local-data/evidence/stage-k1-pc-full-regression/offline.json",
+            "local-data/evidence/stage-integration-startup-full-regression/offline.json"
           ],
           "blocker": null
         },
@@ -2244,7 +2271,8 @@
         "Official WebRTC camera is now selectable through RobotSession; synthetic lifecycle and app composition checks pass. Actual relay/robot, edge-to-peer correspondence, capture timing and gesture motion alignment remain unqualified.",
         "Audited existing speech interval/source-generation binding and delayed/reordered transcript selection; corrected stale not_started to partial. Unknown-exposure frames cannot acquire speech keyword associations from receipt time. Full measured clock mapping/uncertainty-expanded retrieval, source frame identity and real show-then-lower qualification remain under review; targeted deterministic checks do not establish V5 completion.",
         "Full stage-workload-entrypoint-full-regression: 1398 passed, 2 required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 6210224df277 retained with 128 matching packaged source files. No whole-feature or physical validation promotion.",
-        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion."
+        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion.",
+        "Full stage-integration-startup-full-regression: 1424 passed, two required real datasets blocked, zero failures/unexecuted. Tested wheel 24c17bcc8de6 retained, 129 matching packaged source files. No whole-feature or physical validation promotion."
       ]
     },
     {
@@ -2381,7 +2409,8 @@
             "local-data/evidence/stage-extraction-upgrade-full-regression/offline.json",
             "local-data/evidence/stage-workload-capture-reviewed-regression/offline.json",
             "local-data/evidence/stage-workload-entrypoint-full-regression/offline.json",
-            "local-data/evidence/stage-k1-pc-full-regression/offline.json"
+            "local-data/evidence/stage-k1-pc-full-regression/offline.json",
+            "local-data/evidence/stage-integration-startup-full-regression/offline.json"
           ],
           "blocker": null
         },
@@ -2408,7 +2437,8 @@
         "Current harness coverage gaps and remaining independent work are recorded in docs/iago/VALIDATION_GAPS.md; fixture/hardware availability alone does not establish complete acceptance.",
         "Combined visual/document retrieval now records one owner-scoped sample from enforced budget start through last result/limit, with configured deadline. Calendar-only work produces no retrieval sample. Report fails successful deadline overruns; error/late exhausted requests remain distinct. Actual workload/physical validation not promoted; retained wheel predates this instrumentation.",
         "Full stage-workload-entrypoint-full-regression: 1398 passed, 2 required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 6210224df277 retained with 128 matching packaged source files. No whole-feature or physical validation promotion.",
-        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion."
+        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion.",
+        "Full stage-integration-startup-full-regression: 1424 passed, two required real datasets blocked, zero failures/unexecuted. Tested wheel 24c17bcc8de6 retained, 129 matching packaged source files. No whole-feature or physical validation promotion."
       ]
     },
     {
@@ -2464,7 +2494,8 @@
             "local-data/evidence/stage-extraction-upgrade-full-regression/offline.json",
             "local-data/evidence/stage-workload-capture-reviewed-regression/offline.json",
             "local-data/evidence/stage-workload-entrypoint-full-regression/offline.json",
-            "local-data/evidence/stage-k1-pc-full-regression/offline.json"
+            "local-data/evidence/stage-k1-pc-full-regression/offline.json",
+            "local-data/evidence/stage-integration-startup-full-regression/offline.json"
           ],
           "blocker": null
         },
@@ -2482,7 +2513,8 @@
       "notes": [
         "Current harness coverage gaps and remaining independent work are recorded in docs/iago/VALIDATION_GAPS.md; fixture/hardware availability alone does not establish complete acceptance.",
         "Full stage-workload-entrypoint-full-regression: 1398 passed, 2 required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 6210224df277 retained with 128 matching packaged source files. No whole-feature or physical validation promotion.",
-        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion."
+        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion.",
+        "Full stage-integration-startup-full-regression: 1424 passed, two required real datasets blocked, zero failures/unexecuted. Tested wheel 24c17bcc8de6 retained, 129 matching packaged source files. No whole-feature or physical validation promotion."
       ]
     },
     {
@@ -2562,7 +2594,8 @@
             "local-data/evidence/stage-extraction-upgrade-full-regression/offline.json",
             "local-data/evidence/stage-workload-capture-reviewed-regression/offline.json",
             "local-data/evidence/stage-workload-entrypoint-full-regression/offline.json",
-            "local-data/evidence/stage-k1-pc-full-regression/offline.json"
+            "local-data/evidence/stage-k1-pc-full-regression/offline.json",
+            "local-data/evidence/stage-integration-startup-full-regression/offline.json"
           ],
           "blocker": null
         },
@@ -2584,7 +2617,8 @@
       "notes": [
         "Current harness coverage gaps and remaining independent work are recorded in docs/iago/VALIDATION_GAPS.md; fixture/hardware availability alone does not establish complete acceptance.",
         "Full stage-workload-entrypoint-full-regression: 1398 passed, 2 required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 6210224df277 retained with 128 matching packaged source files. No whole-feature or physical validation promotion.",
-        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion."
+        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion.",
+        "Full stage-integration-startup-full-regression: 1424 passed, two required real datasets blocked, zero failures/unexecuted. Tested wheel 24c17bcc8de6 retained, 129 matching packaged source files. No whole-feature or physical validation promotion."
       ]
     },
     {
@@ -2716,7 +2750,8 @@
             "local-data/evidence/stage-extraction-upgrade-full-regression/offline.json",
             "local-data/evidence/stage-workload-capture-reviewed-regression/offline.json",
             "local-data/evidence/stage-workload-entrypoint-full-regression/offline.json",
-            "local-data/evidence/stage-k1-pc-full-regression/offline.json"
+            "local-data/evidence/stage-k1-pc-full-regression/offline.json",
+            "local-data/evidence/stage-integration-startup-full-regression/offline.json"
           ],
           "blocker": null
         },
@@ -2743,7 +2778,8 @@
         "Detector uploads now have independent bounded admission and post-body source/controller/mode/freshness validation. Actual held HTTP requests with fake workers verify clear/Idle/replacement/duplicate/invalid-time rejection, aging during upload and cancellation-slot reuse. No physical inference qualification; current release artifact predates the fix.",
         "Bounded HTTP archive and returned detector-execution timing streams added to workload distributions. Successful/error/canceled handling and invalid-value sequence gaps remain separate. Excludes physical capture, robot archive path, dropped/queue time and gesture temporal commit; no physical qualification.",
         "Full stage-workload-entrypoint-full-regression: 1398 passed, 2 required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 6210224df277 retained with 128 matching packaged source files. No whole-feature or physical validation promotion.",
-        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion."
+        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion.",
+        "Full stage-integration-startup-full-regression: 1424 passed, two required real datasets blocked, zero failures/unexecuted. Tested wheel 24c17bcc8de6 retained, 129 matching packaged source files. No whole-feature or physical validation promotion."
       ]
     },
     {
@@ -2826,7 +2862,8 @@
             "local-data/evidence/stage-extraction-upgrade-full-regression/offline.json",
             "local-data/evidence/stage-workload-capture-reviewed-regression/offline.json",
             "local-data/evidence/stage-workload-entrypoint-full-regression/offline.json",
-            "local-data/evidence/stage-k1-pc-full-regression/offline.json"
+            "local-data/evidence/stage-k1-pc-full-regression/offline.json",
+            "local-data/evidence/stage-integration-startup-full-regression/offline.json"
           ],
           "blocker": null
         },
@@ -2844,7 +2881,8 @@
       "notes": [
         "Current harness coverage gaps and remaining independent work are recorded in docs/iago/VALIDATION_GAPS.md; fixture/hardware availability alone does not establish complete acceptance.",
         "Full stage-workload-entrypoint-full-regression: 1398 passed, 2 required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 6210224df277 retained with 128 matching packaged source files. No whole-feature or physical validation promotion.",
-        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion."
+        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion.",
+        "Full stage-integration-startup-full-regression: 1424 passed, two required real datasets blocked, zero failures/unexecuted. Tested wheel 24c17bcc8de6 retained, 129 matching packaged source files. No whole-feature or physical validation promotion."
       ]
     },
     {
@@ -2959,7 +2997,8 @@
             "local-data/evidence/stage-extraction-upgrade-full-regression/offline.json",
             "local-data/evidence/stage-workload-capture-reviewed-regression/offline.json",
             "local-data/evidence/stage-workload-entrypoint-full-regression/offline.json",
-            "local-data/evidence/stage-k1-pc-full-regression/offline.json"
+            "local-data/evidence/stage-k1-pc-full-regression/offline.json",
+            "local-data/evidence/stage-integration-startup-full-regression/offline.json"
           ],
           "blocker": "WAVE-REAL-RECORDED-DATASET: missing frozen, reviewed real wave recordings (at least 20 positive and 20 negative clips) configured through IAGO_WAVE_CLIP_MANIFEST. Preserve original recall and false-trigger thresholds; deterministic passes do not replace recorded qualification."
         },
@@ -2985,7 +3024,8 @@
         "Detector uploads now have independent bounded admission and post-body source/controller/mode/freshness validation. Actual held HTTP requests with fake workers verify clear/Idle/replacement/duplicate/invalid-time rejection, aging during upload and cancellation-slot reuse. No physical inference qualification; current release artifact predates the fix.",
         "Full stage-workload-entrypoint-full-regression: 1398 passed, 2 required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 6210224df277 retained with 128 matching packaged source files. No whole-feature or physical validation promotion.",
         "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion.",
-        "User confirms real independently labeled wave/thumb recordings do not exist locally. Corresponding required datasets remain blocked with unchanged thresholds; user will record and configure manifests later. No synthetic substitution."
+        "User confirms real independently labeled wave/thumb recordings do not exist locally. Corresponding required datasets remain blocked with unchanged thresholds; user will record and configure manifests later. No synthetic substitution.",
+        "Full stage-integration-startup-full-regression: 1424 passed, two required real datasets blocked, zero failures/unexecuted. Tested wheel 24c17bcc8de6 retained, 129 matching packaged source files. No whole-feature or physical validation promotion."
       ]
     },
     {
@@ -3107,7 +3147,8 @@
             "local-data/evidence/stage-extraction-upgrade-full-regression/offline.json",
             "local-data/evidence/stage-workload-capture-reviewed-regression/offline.json",
             "local-data/evidence/stage-workload-entrypoint-full-regression/offline.json",
-            "local-data/evidence/stage-k1-pc-full-regression/offline.json"
+            "local-data/evidence/stage-k1-pc-full-regression/offline.json",
+            "local-data/evidence/stage-integration-startup-full-regression/offline.json"
           ],
           "blocker": null
         },
@@ -3131,7 +3172,8 @@
       "notes": [
         "Current harness coverage gaps and remaining independent work are recorded in docs/iago/VALIDATION_GAPS.md; fixture/hardware availability alone does not establish complete acceptance.",
         "Full stage-workload-entrypoint-full-regression: 1398 passed, 2 required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 6210224df277 retained with 128 matching packaged source files. No whole-feature or physical validation promotion.",
-        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion."
+        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion.",
+        "Full stage-integration-startup-full-regression: 1424 passed, two required real datasets blocked, zero failures/unexecuted. Tested wheel 24c17bcc8de6 retained, 129 matching packaged source files. No whole-feature or physical validation promotion."
       ]
     },
     {
@@ -3233,7 +3275,8 @@
             "local-data/evidence/stage-extraction-upgrade-full-regression/offline.json",
             "local-data/evidence/stage-workload-capture-reviewed-regression/offline.json",
             "local-data/evidence/stage-workload-entrypoint-full-regression/offline.json",
-            "local-data/evidence/stage-k1-pc-full-regression/offline.json"
+            "local-data/evidence/stage-k1-pc-full-regression/offline.json",
+            "local-data/evidence/stage-integration-startup-full-regression/offline.json"
           ],
           "blocker": null
         },
@@ -3248,7 +3291,8 @@
         "Presence timing controls preserve defaults, persist across restart and apply to source-generation resets. Synthetic HTTP/interpreter and browser checks pass; real controlled-entry qualification remains pending.",
         "Account-bound external event ingress is now installed in the behavior path; synthetic ordering, account invalidation, storm counts and local app greeting/timeout checks pass. Actual external services remain future scope; physical priority remains unqualified.",
         "Full stage-workload-entrypoint-full-regression: 1398 passed, 2 required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 6210224df277 retained with 128 matching packaged source files. No whole-feature or physical validation promotion.",
-        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion."
+        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion.",
+        "Full stage-integration-startup-full-regression: 1424 passed, two required real datasets blocked, zero failures/unexecuted. Tested wheel 24c17bcc8de6 retained, 129 matching packaged source files. No whole-feature or physical validation promotion."
       ]
     },
     {
@@ -3348,7 +3392,8 @@
             "local-data/evidence/stage-extraction-upgrade-full-regression/offline.json",
             "local-data/evidence/stage-workload-capture-reviewed-regression/offline.json",
             "local-data/evidence/stage-workload-entrypoint-full-regression/offline.json",
-            "local-data/evidence/stage-k1-pc-full-regression/offline.json"
+            "local-data/evidence/stage-k1-pc-full-regression/offline.json",
+            "local-data/evidence/stage-integration-startup-full-regression/offline.json"
           ],
           "blocker": null
         },
@@ -3377,7 +3422,8 @@
         "Current harness coverage gaps and remaining independent work are recorded in docs/iago/VALIDATION_GAPS.md; fixture/hardware availability alone does not establish complete acceptance.",
         "Presence timing controls preserve defaults, persist across restart and apply to source-generation resets. Synthetic HTTP/interpreter and browser checks pass; real controlled-entry qualification remains pending.",
         "Full stage-workload-entrypoint-full-regression: 1398 passed, 2 required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 6210224df277 retained with 128 matching packaged source files. No whole-feature or physical validation promotion.",
-        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion."
+        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion.",
+        "Full stage-integration-startup-full-regression: 1424 passed, two required real datasets blocked, zero failures/unexecuted. Tested wheel 24c17bcc8de6 retained, 129 matching packaged source files. No whole-feature or physical validation promotion."
       ]
     },
     {
@@ -3468,7 +3514,8 @@
             "local-data/evidence/stage-extraction-upgrade-full-regression/offline.json",
             "local-data/evidence/stage-workload-capture-reviewed-regression/offline.json",
             "local-data/evidence/stage-workload-entrypoint-full-regression/offline.json",
-            "local-data/evidence/stage-k1-pc-full-regression/offline.json"
+            "local-data/evidence/stage-k1-pc-full-regression/offline.json",
+            "local-data/evidence/stage-integration-startup-full-regression/offline.json"
           ],
           "blocker": null
         },
@@ -3491,7 +3538,8 @@
       "notes": [
         "Current harness coverage gaps and remaining independent work are recorded in docs/iago/VALIDATION_GAPS.md; fixture/hardware availability alone does not establish complete acceptance.",
         "Full stage-workload-entrypoint-full-regression: 1398 passed, 2 required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 6210224df277 retained with 128 matching packaged source files. No whole-feature or physical validation promotion.",
-        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion."
+        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion.",
+        "Full stage-integration-startup-full-regression: 1424 passed, two required real datasets blocked, zero failures/unexecuted. Tested wheel 24c17bcc8de6 retained, 129 matching packaged source files. No whole-feature or physical validation promotion."
       ]
     },
     {
@@ -3596,7 +3644,8 @@
             "local-data/evidence/stage-extraction-upgrade-full-regression/offline.json",
             "local-data/evidence/stage-workload-capture-reviewed-regression/offline.json",
             "local-data/evidence/stage-workload-entrypoint-full-regression/offline.json",
-            "local-data/evidence/stage-k1-pc-full-regression/offline.json"
+            "local-data/evidence/stage-k1-pc-full-regression/offline.json",
+            "local-data/evidence/stage-integration-startup-full-regression/offline.json"
           ],
           "blocker": null
         },
@@ -3620,7 +3669,8 @@
         "Current harness coverage gaps and remaining independent work are recorded in docs/iago/VALIDATION_GAPS.md; fixture/hardware availability alone does not establish complete acceptance.",
         "Account-bound external event ingress is now installed in the behavior path; synthetic ordering, account invalidation, storm counts and local app greeting/timeout checks pass. Actual external services remain future scope; physical priority remains unqualified.",
         "Full stage-workload-entrypoint-full-regression: 1398 passed, 2 required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 6210224df277 retained with 128 matching packaged source files. No whole-feature or physical validation promotion.",
-        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion."
+        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion.",
+        "Full stage-integration-startup-full-regression: 1424 passed, two required real datasets blocked, zero failures/unexecuted. Tested wheel 24c17bcc8de6 retained, 129 matching packaged source files. No whole-feature or physical validation promotion."
       ]
     },
     {
@@ -3716,7 +3766,8 @@
             "local-data/evidence/stage-extraction-upgrade-full-regression/offline.json",
             "local-data/evidence/stage-workload-capture-reviewed-regression/offline.json",
             "local-data/evidence/stage-workload-entrypoint-full-regression/offline.json",
-            "local-data/evidence/stage-k1-pc-full-regression/offline.json"
+            "local-data/evidence/stage-k1-pc-full-regression/offline.json",
+            "local-data/evidence/stage-integration-startup-full-regression/offline.json"
           ],
           "blocker": null
         },
@@ -3740,7 +3791,8 @@
         "Current harness coverage gaps and remaining independent work are recorded in docs/iago/VALIDATION_GAPS.md; fixture/hardware availability alone does not establish complete acceptance.",
         "Local supervisor Stop now attempts motion hold even when audio flush fails; playback stays latched off and both ordinary failures are preserved when both cleanup paths fail. Synthetic device failure tests passed, without physical hold/cutoff qualification. Retained package predates this runtime fix.",
         "Full stage-workload-entrypoint-full-regression: 1398 passed, 2 required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 6210224df277 retained with 128 matching packaged source files. No whole-feature or physical validation promotion.",
-        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion."
+        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion.",
+        "Full stage-integration-startup-full-regression: 1424 passed, two required real datasets blocked, zero failures/unexecuted. Tested wheel 24c17bcc8de6 retained, 129 matching packaged source files. No whole-feature or physical validation promotion."
       ]
     },
     {
@@ -3848,7 +3900,8 @@
             "local-data/evidence/stage-extraction-upgrade-full-regression/offline.json",
             "local-data/evidence/stage-workload-capture-reviewed-regression/offline.json",
             "local-data/evidence/stage-workload-entrypoint-full-regression/offline.json",
-            "local-data/evidence/stage-k1-pc-full-regression/offline.json"
+            "local-data/evidence/stage-k1-pc-full-regression/offline.json",
+            "local-data/evidence/stage-integration-startup-full-regression/offline.json"
           ],
           "blocker": null
         },
@@ -3871,7 +3924,8 @@
         "Clean-install camera-extra coverage passed after correcting unsupported assumptions that the official SDK neither installs nor imports GStreamer. Base desktop optional-dependency absence remains asserted. Full report retains 905 passes, one original packaging-test failure and two blocked recordings; corrected packaging check is separate. Tested wheel 84c3430ff144 retained; no qualification promotion.",
         "Windows offline CI workflow added with pinned actions, locked extras, browser/model setup and unconditional evidence upload. Missing required datasets remain non-success. YAML checked locally; hosted run not executed.",
         "Full stage-workload-entrypoint-full-regression: 1398 passed, 2 required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 6210224df277 retained with 128 matching packaged source files. No whole-feature or physical validation promotion.",
-        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion."
+        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion.",
+        "Full stage-integration-startup-full-regression: 1424 passed, two required real datasets blocked, zero failures/unexecuted. Tested wheel 24c17bcc8de6 retained, 129 matching packaged source files. No whole-feature or physical validation promotion."
       ]
     },
     {
@@ -4128,7 +4182,8 @@
             "local-data/evidence/stage-extraction-upgrade-full-regression/offline.json",
             "local-data/evidence/stage-workload-capture-reviewed-regression/offline.json",
             "local-data/evidence/stage-workload-entrypoint-full-regression/offline.json",
-            "local-data/evidence/stage-k1-pc-full-regression/offline.json"
+            "local-data/evidence/stage-k1-pc-full-regression/offline.json",
+            "local-data/evidence/stage-integration-startup-full-regression/offline.json"
           ],
           "blocker": null
         },
@@ -4169,7 +4224,8 @@
         "Local supervisor Stop now attempts motion hold even when audio flush fails; playback stays latched off and both ordinary failures are preserved when both cleanup paths fail. Synthetic device failure tests passed, without physical hold/cutoff qualification. Retained package predates this runtime fix.",
         "Native worker failures set shared shutdown before local Stop and contain secondary cleanup exceptions as coarse type diagnostics. Microphone/motion/playback loops terminate; heartbeat rejects failed runtime and drives existing owner cleanup. Synthetic fault checks pass; hardware recovery remains unqualified.",
         "Full stage-workload-entrypoint-full-regression: 1398 passed, 2 required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 6210224df277 retained with 128 matching packaged source files. No whole-feature or physical validation promotion.",
-        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion."
+        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion.",
+        "Full stage-integration-startup-full-regression: 1424 passed, two required real datasets blocked, zero failures/unexecuted. Tested wheel 24c17bcc8de6 retained, 129 matching packaged source files. No whole-feature or physical validation promotion."
       ]
     },
     {
@@ -4376,7 +4432,8 @@
             "local-data/evidence/stage-extraction-upgrade-full-regression/offline.json",
             "local-data/evidence/stage-workload-capture-reviewed-regression/offline.json",
             "local-data/evidence/stage-workload-entrypoint-full-regression/offline.json",
-            "local-data/evidence/stage-k1-pc-full-regression/offline.json"
+            "local-data/evidence/stage-k1-pc-full-regression/offline.json",
+            "local-data/evidence/stage-integration-startup-full-regression/offline.json"
           ],
           "blocker": null
         },
@@ -4412,7 +4469,8 @@
         "Local supervisor Stop now attempts motion hold even when audio flush fails; playback stays latched off and both ordinary failures are preserved when both cleanup paths fail. Synthetic device failure tests passed, without physical hold/cutoff qualification. Retained package predates this runtime fix.",
         "Native worker failures set shared shutdown before local Stop and contain secondary cleanup exceptions as coarse type diagnostics. Microphone/motion/playback loops terminate; heartbeat rejects failed runtime and drives existing owner cleanup. Synthetic fault checks pass; hardware recovery remains unqualified.",
         "Full stage-workload-entrypoint-full-regression: 1398 passed, 2 required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 6210224df277 retained with 128 matching packaged source files. No whole-feature or physical validation promotion.",
-        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion."
+        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion.",
+        "Full stage-integration-startup-full-regression: 1424 passed, two required real datasets blocked, zero failures/unexecuted. Tested wheel 24c17bcc8de6 retained, 129 matching packaged source files. No whole-feature or physical validation promotion."
       ]
     },
     {
@@ -4588,7 +4646,8 @@
             "local-data/evidence/stage-workload-capture-reviewed-regression/offline.json",
             "local-data/evidence/stage-workload-entrypoint-full-regression/offline.json",
             "local-data/evidence/stage-k1-pc-bundle-reviewed/offline-subset.json",
-            "local-data/evidence/stage-k1-pc-full-regression/offline.json"
+            "local-data/evidence/stage-k1-pc-full-regression/offline.json",
+            "local-data/evidence/stage-integration-startup-full-regression/offline.json"
           ],
           "blocker": null
         },
@@ -4611,7 +4670,8 @@
         "Clean-install camera-extra coverage passed after correcting unsupported assumptions that the official SDK neither installs nor imports GStreamer. Base desktop optional-dependency absence remains asserted. Full report retains 905 passes, one original packaging-test failure and two blocked recordings; corrected packaging check is separate. Tested wheel 84c3430ff144 retained; no qualification promotion.",
         "Full stage-workload-entrypoint-full-regression: 1398 passed, 2 required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 6210224df277 retained with 128 matching packaged source files. No whole-feature or physical validation promotion.",
         "K1 PC artifact entrypoint implemented; 34 scoped synthetic checks pass, actual prerequisite check blocked. Binds complete query/answer/UI review records and ten spoken queries without promoting physical or whole-feature validation. Latest full regression and wheel predate this module.",
-        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion."
+        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion.",
+        "Full stage-integration-startup-full-regression: 1424 passed, two required real datasets blocked, zero failures/unexecuted. Tested wheel 24c17bcc8de6 retained, 129 matching packaged source files. No whole-feature or physical validation promotion."
       ]
     },
     {
@@ -4659,7 +4719,8 @@
         "reachy_brain/evals/robot_motion.py",
         "reachy_brain/evals/robot_motion_bundle.py",
         "reachy_brain/integrations/runtime.py",
-        "reachy_brain/skills/catalog.py"
+        "reachy_brain/skills/catalog.py",
+        "tests/test_integration_startup_deadline.py"
       ],
       "test_ids": [
         "CANCEL-OWNERSHIP",
@@ -4850,7 +4911,9 @@
         "INDEX-EXTRACTION-UPGRADE",
         "INDEX-EXTRACTION-UPGRADE-FAILURE",
         "INDEX-UPGRADE-APPLICATION-STARTUP",
-        "INDEX-UPGRADE-UNAVAILABLE-SOURCE"
+        "INDEX-UPGRADE-UNAVAILABLE-SOURCE",
+        "E1-STARTUP-DEADLINE",
+        "E1-STARTUP-TIMEOUT-VALIDATION"
       ],
       "validation": {
         "offline": {
@@ -5049,7 +5112,10 @@
             "local-data/evidence/stage-extraction-upgrade-full-regression/offline.json",
             "local-data/evidence/stage-workload-capture-reviewed-regression/offline.json",
             "local-data/evidence/stage-workload-entrypoint-full-regression/offline.json",
-            "local-data/evidence/stage-k1-pc-full-regression/offline.json"
+            "local-data/evidence/stage-k1-pc-full-regression/offline.json",
+            "local-data/evidence/stage-integration-startup-deadline-before/offline-subset.json",
+            "local-data/evidence/stage-integration-startup-deadline-reviewed/offline-subset.json",
+            "local-data/evidence/stage-integration-startup-full-regression/offline.json"
           ],
           "blocker": null
         },
@@ -5102,7 +5168,9 @@
         "Ordinary PC/robot acoustic manifests now identify duplicate events by recording SHA256 and event sample, excluding channel. Another channel cannot inflate independent interruption counts. Three synthetic profile cases reproduced the prior gap and pass after correction; no physical trial pass.",
         "Native worker failures set shared shutdown before local Stop and contain secondary cleanup exceptions as coarse type diagnostics. Microphone/motion/playback loops terminate; heartbeat rejects failed runtime and drives existing owner cleanup. Synthetic fault checks pass; hardware recovery remains unqualified.",
         "Full stage-workload-entrypoint-full-regression: 1398 passed, 2 required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 6210224df277 retained with 128 matching packaged source files. No whole-feature or physical validation promotion.",
-        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion."
+        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion.",
+        "Host startup deadline now covers cooperative module entry and discovery; timeout validated before adapter construction. Nine pre-fix failures and 37 reviewed scoped passes retained. No physical qualification or hard isolation claim; full package predates startup fixes.",
+        "Full stage-integration-startup-full-regression: 1424 passed, two required real datasets blocked, zero failures/unexecuted. Tested wheel 24c17bcc8de6 retained, 129 matching packaged source files. No whole-feature or physical validation promotion."
       ]
     },
     {
@@ -5433,7 +5501,8 @@
             "local-data/evidence/stage-workload-review-chronology/offline-subset.json",
             "local-data/evidence/stage-workload-entrypoint-reviewed/offline-subset.json",
             "local-data/evidence/stage-workload-entrypoint-full-regression/offline.json",
-            "local-data/evidence/stage-k1-pc-full-regression/offline.json"
+            "local-data/evidence/stage-k1-pc-full-regression/offline.json",
+            "local-data/evidence/stage-integration-startup-full-regression/offline.json"
           ],
           "blocker": null
         },
@@ -5488,7 +5557,8 @@
         "Echo scoring now hashes and measures the same bounded temporary WAV snapshot, preventing original-file mutation after hash verification from changing measured PCM. Snapshot uses up to 512 MiB temporary disk and closes on completion/error. Synthetic race regression only, no physical echo pass.",
         "Reviewed PC workload artifact entrypoint implemented: scoped synthetic checks pass, actual prerequisite check blocked for IAGO_PC_WORKLOAD_MANIFEST. Failed/incomplete components retain outcomes. Bound declarations never establish physical qualification; no feature status promoted.",
         "Full stage-workload-entrypoint-full-regression: 1398 passed, 2 required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 6210224df277 retained with 128 matching packaged source files. No whole-feature or physical validation promotion.",
-        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion."
+        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion.",
+        "Full stage-integration-startup-full-regression: 1424 passed, two required real datasets blocked, zero failures/unexecuted. Tested wheel 24c17bcc8de6 retained, 129 matching packaged source files. No whole-feature or physical validation promotion."
       ]
     },
     {
@@ -5671,7 +5741,8 @@
             "local-data/evidence/stage-workload-review-chronology/offline-subset.json",
             "local-data/evidence/stage-workload-entrypoint-reviewed/offline-subset.json",
             "local-data/evidence/stage-workload-entrypoint-full-regression/offline.json",
-            "local-data/evidence/stage-k1-pc-full-regression/offline.json"
+            "local-data/evidence/stage-k1-pc-full-regression/offline.json",
+            "local-data/evidence/stage-integration-startup-full-regression/offline.json"
           ],
           "blocker": "THUMBS-REAL-RECORDED-DATASET: missing frozen, reviewed real thumb recordings (20 thumbs-up, 20 thumbs-down and 20 negative clips) configured through IAGO_THUMB_CLIP_MANIFEST. Preserve original recall, false-trigger and zero wrong-polarity criteria; also retain the wave regression."
         },
@@ -5710,7 +5781,8 @@
         "Reviewed PC workload artifact entrypoint implemented: scoped synthetic checks pass, actual prerequisite check blocked for IAGO_PC_WORKLOAD_MANIFEST. Failed/incomplete components retain outcomes. Bound declarations never establish physical qualification; no feature status promoted.",
         "Full stage-workload-entrypoint-full-regression: 1398 passed, 2 required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 6210224df277 retained with 128 matching packaged source files. No whole-feature or physical validation promotion.",
         "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion.",
-        "User confirms real independently labeled wave/thumb recordings do not exist locally. Corresponding required datasets remain blocked with unchanged thresholds; user will record and configure manifests later. No synthetic substitution."
+        "User confirms real independently labeled wave/thumb recordings do not exist locally. Corresponding required datasets remain blocked with unchanged thresholds; user will record and configure manifests later. No synthetic substitution.",
+        "Full stage-integration-startup-full-regression: 1424 passed, two required real datasets blocked, zero failures/unexecuted. Tested wheel 24c17bcc8de6 retained, 129 matching packaged source files. No whole-feature or physical validation promotion."
       ]
     },
     {
@@ -5927,7 +5999,8 @@
             "local-data/evidence/stage-workload-review-chronology/offline-subset.json",
             "local-data/evidence/stage-workload-entrypoint-reviewed/offline-subset.json",
             "local-data/evidence/stage-workload-entrypoint-full-regression/offline.json",
-            "local-data/evidence/stage-k1-pc-full-regression/offline.json"
+            "local-data/evidence/stage-k1-pc-full-regression/offline.json",
+            "local-data/evidence/stage-integration-startup-full-regression/offline.json"
           ],
           "blocker": null
         },
@@ -5960,7 +6033,8 @@
         "Bounded HTTP archive and returned detector-execution timing streams added to workload distributions. Successful/error/canceled handling and invalid-value sequence gaps remain separate. Excludes physical capture, robot archive path, dropped/queue time and gesture temporal commit; no physical qualification.",
         "Reviewed PC workload artifact entrypoint implemented: scoped synthetic checks pass, actual prerequisite check blocked for IAGO_PC_WORKLOAD_MANIFEST. Failed/incomplete components retain outcomes. Bound declarations never establish physical qualification; no feature status promoted.",
         "Full stage-workload-entrypoint-full-regression: 1398 passed, 2 required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 6210224df277 retained with 128 matching packaged source files. No whole-feature or physical validation promotion.",
-        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion."
+        "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion.",
+        "Full stage-integration-startup-full-regression: 1424 passed, two required real datasets blocked, zero failures/unexecuted. Tested wheel 24c17bcc8de6 retained, 129 matching packaged source files. No whole-feature or physical validation promotion."
       ]
     },
     {
@@ -6181,7 +6255,8 @@
             "local-data/evidence/stage-workload-entrypoint-reviewed/offline-subset.json",
             "local-data/evidence/stage-workload-entrypoint-full-regression/offline.json",
             "local-data/evidence/stage-k1-pc-bundle-reviewed/offline-subset.json",
-            "local-data/evidence/stage-k1-pc-full-regression/offline.json"
+            "local-data/evidence/stage-k1-pc-full-regression/offline.json",
+            "local-data/evidence/stage-integration-startup-full-regression/offline.json"
           ],
           "blocker": null
         },
@@ -6219,7 +6294,8 @@
         "Full stage-workload-entrypoint-full-regression: 1398 passed, 2 required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 6210224df277 retained with 128 matching packaged source files. No whole-feature or physical validation promotion.",
         "K1 PC artifact entrypoint implemented; 34 scoped synthetic checks pass, actual prerequisite check blocked. Binds complete query/answer/UI review records and ten spoken queries without promoting physical or whole-feature validation. Latest full regression and wheel predate this module.",
         "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion.",
-        "User confirms no completed K1 human review exists; retained template remains ungraded. K1-HUMAN-REVIEWED-ANSWER-QUALITY stays blocked with unchanged thresholds. User will provide exact capture/review paths after independent review; no model self-grading authorized."
+        "User confirms no completed K1 human review exists; retained template remains ungraded. K1-HUMAN-REVIEWED-ANSWER-QUALITY stays blocked with unchanged thresholds. User will provide exact capture/review paths after independent review; no model self-grading authorized.",
+        "Full stage-integration-startup-full-regression: 1424 passed, two required real datasets blocked, zero failures/unexecuted. Tested wheel 24c17bcc8de6 retained, 129 matching packaged source files. No whole-feature or physical validation promotion."
       ]
     },
     {
@@ -6257,7 +6333,8 @@
         "reachy_brain/evals/workload_review.py",
         "tests/test_physical_workload.py",
         "tests/test_workload_entrypoint.py",
-        "tests/test_direct_startup_credentials.py"
+        "tests/test_direct_startup_credentials.py",
+        "tests/test_integration_startup_deadline.py"
       ],
       "test_ids": [
         "E1-CONFIRM",
@@ -6387,7 +6464,9 @@
         "WORKLOAD-REVIEW-ARTIFACT-BINDING",
         "PC-WORKLOAD-REVIEWED-BUNDLE",
         "WORKLOAD-ENTRYPOINT-EVIDENCE",
-        "E1-DIRECT-STARTUP-CREDENTIAL-CLEANUP"
+        "E1-DIRECT-STARTUP-CREDENTIAL-CLEANUP",
+        "E1-STARTUP-DEADLINE",
+        "E1-STARTUP-TIMEOUT-VALIDATION"
       ],
       "validation": {
         "offline": {
@@ -6541,7 +6620,10 @@
             "local-data/evidence/stage-workload-entrypoint-full-regression/offline.json",
             "local-data/evidence/stage-k1-pc-full-regression/offline.json",
             "local-data/evidence/stage-direct-startup-before/offline-subset.json",
-            "local-data/evidence/stage-direct-startup-fixed/offline-subset.json"
+            "local-data/evidence/stage-direct-startup-fixed/offline-subset.json",
+            "local-data/evidence/stage-integration-startup-deadline-before/offline-subset.json",
+            "local-data/evidence/stage-integration-startup-deadline-reviewed/offline-subset.json",
+            "local-data/evidence/stage-integration-startup-full-regression/offline.json"
           ],
           "blocker": null
         },
@@ -6600,7 +6682,9 @@
         "Reviewed PC workload artifact entrypoint implemented: scoped synthetic checks pass, actual prerequisite check blocked for IAGO_PC_WORKLOAD_MANIFEST. Failed/incomplete components retain outcomes. Bound declarations never establish physical qualification; no feature status promoted.",
         "Full stage-workload-entrypoint-full-regression: 1398 passed, 2 required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 6210224df277 retained with 128 matching packaged source files. No whole-feature or physical validation promotion.",
         "Full stage-k1-pc-full-regression: 1413 passed, two required real recorded datasets blocked, zero failures/unexecuted. Tested wheel 883f616eac18 retained, 129 packaged source files matched. No whole-feature or physical validation promotion.",
-        "Direct adapter failure/cancellation during context entry now invalidates host credentials. Synthetic reproductions and affected regression retained. Full package predates fix; adapter itself still owns partial resource cleanup."
+        "Direct adapter failure/cancellation during context entry now invalidates host credentials. Synthetic reproductions and affected regression retained. Full package predates fix; adapter itself still owns partial resource cleanup.",
+        "Host startup deadline now covers cooperative module entry and discovery; timeout validated before adapter construction. Nine pre-fix failures and 37 reviewed scoped passes retained. No physical qualification or hard isolation claim; full package predates startup fixes.",
+        "Full stage-integration-startup-full-regression: 1424 passed, two required real datasets blocked, zero failures/unexecuted. Tested wheel 24c17bcc8de6 retained, 129 matching packaged source files. No whole-feature or physical validation promotion."
       ]
     }
   ],
